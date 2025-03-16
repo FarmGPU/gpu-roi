@@ -1,0 +1,10 @@
+[build]
+command = "pnpm build"
+pages_build_output_dir = "out"
+
+[build.environment]
+NODE_VERSION = "20"
+
+[site]
+bucket = ".next/standalone"
+entry-point = "."
