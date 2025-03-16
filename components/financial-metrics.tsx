@@ -70,7 +70,7 @@ export function FinancialMetrics({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Card className="bg-white dark:bg-fgpu-stone-900">
+      <Card className="bg-fgpu-stone-600 border-fgpu-stone-700">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium flex items-center gap-2 text-fgpu-stone-600 dark:text-fgpu-gray-300">
             <HiCurrencyDollar className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
@@ -80,7 +80,7 @@ export function FinancialMetrics({
         <p className="text-2xl font-bold text-fgpu-black dark:text-fgpu-white">${initialCost.toLocaleString()}</p>
       </Card>
 
-      <Card className="bg-white dark:bg-fgpu-stone-900">
+      <Card className="bg-fgpu-stone-600 border-fgpu-stone-700">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium flex items-center gap-2 text-fgpu-stone-600 dark:text-fgpu-gray-300">
             <HiCurrencyDollar className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
@@ -90,7 +90,7 @@ export function FinancialMetrics({
         <p className="text-2xl font-bold text-fgpu-black dark:text-fgpu-white">${annualRevenue.toLocaleString()}</p>
       </Card>
 
-      <Card className="bg-white dark:bg-fgpu-stone-900">
+      <Card className="bg-fgpu-stone-600 border-fgpu-stone-700">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium flex items-center gap-2 text-fgpu-stone-600 dark:text-fgpu-gray-300">
             <HiChartPie className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
@@ -113,7 +113,7 @@ export function FinancialMetrics({
         </p>
       </Card>
 
-      <Card className="bg-white dark:bg-fgpu-stone-900">
+      <Card className="bg-fgpu-stone-600 border-fgpu-stone-700">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium flex items-center gap-2 text-fgpu-stone-600 dark:text-fgpu-gray-300">
             <HiTrendingUp className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
@@ -136,7 +136,7 @@ export function FinancialMetrics({
         </p>
       </Card>
 
-      <Card className="bg-white dark:bg-fgpu-stone-900">
+      <Card className="bg-fgpu-stone-600 border-fgpu-stone-700">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium flex items-center gap-2 text-fgpu-stone-600 dark:text-fgpu-gray-300">
             <HiClock className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
@@ -159,7 +159,7 @@ export function FinancialMetrics({
       </Card>
 
       {providerPaysOpex && (
-        <div className="md:col-span-2 p-3 bg-fgpu-gray-100 dark:bg-fgpu-stone-800 rounded-lg text-sm text-fgpu-stone-800 dark:text-fgpu-gray-200">
+        <div className="md:col-span-2 p-3 bg-fgpu-stone-600 rounded-lg text-sm text-fgpu-stone-800 dark:text-fgpu-gray-200">
           <p className="flex items-center gap-2">
             <HiInformationCircle className="text-lg text-fgpu-volt" />
             In this model, the provider (data center) pays for all operational expenses. The owner only pays for the

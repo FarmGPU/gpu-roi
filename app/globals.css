@@ -25,6 +25,7 @@
   --radius: 0.5rem;
 }
 
+/* Dark mode is the only mode, so we use the same values */
 .dark {
   --background: 90 10% 5%;
   --foreground: 90 100% 98%;
@@ -45,6 +46,18 @@
   --border: 90 10% 15%;
   --input: 90 10% 15%;
   --ring: 90 100% 50%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-fgpu-black text-fgpu-white;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-fgpu-white;
+  }
 }
 
 /* Chart colors */
@@ -76,23 +89,23 @@
   --fgpu-stone-950: #121410;
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  }
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-weight: 600;
-  }
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--fgpu-stone-900);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--fgpu-stone-700);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fgpu-stone-600);
 }
 
 /* Custom styles for FarmGPU */
@@ -198,24 +211,5 @@
 
 .apexcharts-xaxistooltip-bottom:before {
   border-bottom-color: #34382e !important;
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #1a1c17;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #5a6250;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #747e67;
 }
 

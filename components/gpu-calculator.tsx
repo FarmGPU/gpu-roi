@@ -78,12 +78,12 @@ export function GpuCalculator() {
   const secureAvailable = gpu.secureSpot !== null || gpu.secureOnDemand !== null
 
   return (
-    <Card className="w-full">
-      <h5 className="text-xl font-bold tracking-tight text-fgpu-black dark:text-fgpu-white flex items-center gap-2">
+    <Card className="w-full bg-fgpu-stone-900 border-fgpu-stone-700">
+      <h5 className="text-xl font-bold tracking-tight text-fgpu-white flex items-center gap-2">
         <HiChip className="text-fgpu-volt" />
         GPU Investment Calculator
       </h5>
-      <p className="font-normal text-fgpu-stone-600 dark:text-fgpu-gray-300">
+      <p className="font-normal text-fgpu-gray-300">
         Calculate the total cost of ownership, expected revenue, and return on investment
       </p>
 
@@ -104,7 +104,7 @@ export function GpuCalculator() {
               id="gpu-model"
               value={selectedGpu}
               onChange={(e) => setSelectedGpu(e.target.value)}
-              className="bg-white dark:bg-gray-700 text-fgpu-black dark:text-fgpu-white"
+              className="bg-fgpu-stone-600 border-fgpu-stone-700 text-fgpu-white"
             >
               <option value="" disabled>
                 Select a GPU
@@ -152,7 +152,7 @@ export function GpuCalculator() {
               id="contract-duration"
               value={contractDuration.toString()}
               onChange={(e) => setContractDuration(Number.parseInt(e.target.value))}
-              className="bg-white dark:bg-gray-700 text-fgpu-black dark:text-fgpu-white"
+              className="bg-fgpu-stone-600 border-fgpu-stone-700 text-fgpu-white"
             >
               <option value="1">1 Year</option>
               <option value="2">2 Years</option>
@@ -185,8 +185,8 @@ export function GpuCalculator() {
                     }
                   }}
                   disabled={!secureAvailable && secureMode}
-                  className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    secureMode ? "bg-blue-600" : "bg-fgpu-stone-200 dark:bg-fgpu-stone-700"
+                  className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-fgpu-volt/30 ${
+                    secureMode ? "bg-fgpu-volt" : "bg-fgpu-stone-200 dark:bg-fgpu-stone-700"
                   } ${!secureAvailable && secureMode ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                 >
                   <span
@@ -203,8 +203,8 @@ export function GpuCalculator() {
             )}
           </div>
 
-          <div className="space-y-4 p-4 bg-fgpu-gray-100 dark:bg-fgpu-stone-800 rounded-lg">
-            <h3 className="text-sm font-medium text-fgpu-stone-600 dark:text-fgpu-gray-300 flex items-center gap-2">
+          <div className="space-y-4 p-4 bg-fgpu-stone-600 rounded-lg">
+            <h3 className="text-sm font-medium text-fgpu-gray-300 flex items-center gap-2">
               <HiLightningBolt className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
               Usage Distribution
               <Tooltip content="Set the percentage of time your GPU will be idle, running spot jobs, or on-demand jobs">
@@ -236,7 +236,7 @@ export function GpuCalculator() {
                     setSpotPercentage(Math.round(remaining * ratio))
                     setOnDemandPercentage(Math.round(remaining * (1 - ratio)))
                   }}
-                  className="w-full h-2 bg-fgpu-stone-200 dark:bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                  className="w-full h-2 bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
 
@@ -258,7 +258,7 @@ export function GpuCalculator() {
                     const remaining = 100 - idlePercentage - newValue
                     setOnDemandPercentage(Math.max(0, remaining))
                   }}
-                  className="w-full h-2 bg-fgpu-stone-200 dark:bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                  className="w-full h-2 bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
 
@@ -280,12 +280,12 @@ export function GpuCalculator() {
                     const remaining = 100 - idlePercentage - newValue
                     setSpotPercentage(Math.max(0, remaining))
                   }}
-                  className="w-full h-2 bg-fgpu-stone-200 dark:bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                  className="w-full h-2 bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
             </div>
 
-            <div className="mt-3 pt-3 border-t border-fgpu-gray-300 dark:border-fgpu-stone-700">
+            <div className="mt-3 pt-3 border-t border-fgpu-stone-700">
               <div className="flex justify-between">
                 <span className="text-sm font-medium text-fgpu-stone-600 dark:text-fgpu-gray-300">
                   Effective Hourly Rate:
@@ -295,8 +295,8 @@ export function GpuCalculator() {
             </div>
           </div>
 
-          <div className="space-y-4 p-4 bg-fgpu-gray-100 dark:bg-fgpu-stone-800 rounded-lg">
-            <h3 className="text-sm font-medium text-fgpu-stone-600 dark:text-fgpu-gray-300 flex items-center gap-2">
+          <div className="space-y-4 p-4 bg-fgpu-stone-600 rounded-lg">
+            <h3 className="text-sm font-medium text-fgpu-gray-300 flex items-center gap-2">
               <HiCurrencyDollar className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
               Revenue Sharing
               <Tooltip content="Set how revenue is split between the platform, owner (investor), and provider (data center)">
@@ -317,7 +317,7 @@ export function GpuCalculator() {
                   step={1}
                   value={platformFeePercentage}
                   onChange={(e) => setPlatformFeePercentage(Number.parseInt(e.target.value))}
-                  className="w-full h-2 bg-fgpu-stone-200 dark:bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                  className="w-full h-2 bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
 
@@ -335,7 +335,7 @@ export function GpuCalculator() {
                   step={5}
                   value={ownerSharePercentage}
                   onChange={(e) => setOwnerSharePercentage(Number.parseInt(e.target.value))}
-                  className="w-full h-2 bg-fgpu-stone-200 dark:bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                  className="w-full h-2 bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
 
@@ -348,7 +348,7 @@ export function GpuCalculator() {
                     {100 - ownerSharePercentage}%
                   </span>
                 </div>
-                <div className="w-full h-2 bg-fgpu-stone-200 dark:bg-fgpu-stone-700 rounded-lg dark:bg-gray-700">
+                <div className="w-full h-2 bg-fgpu-stone-700 rounded-lg">
                   <div
                     className="h-2 bg-fgpu-volt rounded-lg"
                     style={{ width: `${100 - ownerSharePercentage}%` }}
@@ -357,7 +357,7 @@ export function GpuCalculator() {
               </div>
             </div>
 
-            <div className="mt-3 pt-3 border-t border-fgpu-gray-300 dark:border-fgpu-stone-700">
+            <div className="mt-3 pt-3 border-t border-fgpu-stone-700">
               <div className="flex justify-between">
                 <span className="text-sm font-medium text-fgpu-stone-600 dark:text-fgpu-gray-300">
                   Annual Owner Revenue:

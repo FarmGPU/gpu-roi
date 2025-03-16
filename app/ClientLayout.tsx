@@ -16,48 +16,8 @@ export default function ClientLayout({
 
   useEffect(() => {
     setMounted(true)
-
-    // Check for user preference
-    const isDarkMode =
-      localStorage.getItem("darkMode") === "true" ||
-      (!("darkMode" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches)
-
-    if (isDarkMode) {
-      document.documentElement.classList.add("dark")
-    } else {
-      document.documentElement.classList.remove("dark")
-    }
-
-    // Check if ApexCharts is already loaded
-    if (typeof window !== "undefined" && window.ApexCharts) {
-      console.log("ApexCharts already loaded in useEffect")
-      setApexChartsLoaded(true)
-    }
-
-    // Fallback: Load ApexCharts directly if Script component fails
-    const loadApexCharts = () => {
-      if (typeof window !== "undefined" && !window.ApexCharts) {
-        console.log("Fallback: Loading ApexCharts directly")
-        const script = document.createElement("script")
-        script.src = "https://cdn.jsdelivr.net/npm/apexcharts"
-        script.async = true
-        script.onload = () => {
-          console.log("ApexCharts loaded via fallback")
-          setApexChartsLoaded(true)
-        }
-        script.onerror = () => {
-          console.error("Failed to load ApexCharts via fallback")
-        }
-        document.body.appendChild(script)
-      }
-    }
-
-    // Try loading ApexCharts after a delay if not already loaded
-    const timer = setTimeout(loadApexCharts, 1000)
-
-    return () => {
-      clearTimeout(timer)
-    }
+    // Force dark mode
+    document.documentElement.classList.add("dark")
   }, [])
 
   // Handle ApexCharts script load
@@ -77,10 +37,66 @@ export default function ClientLayout({
       },
       card: {
         root: {
-          base: "bg-white dark:bg-fgpu-stone-800 rounded-lg border border-gray-200 dark:border-fgpu-stone-700 shadow",
+          base: "bg-fgpu-stone-900 border-fgpu-stone-700 shadow",
         },
       },
+      select: {
+        field: {
+          select: {
+            base: "bg-fgpu-stone-600 border-fgpu-stone-700 text-fgpu-white",
+            colors: {
+              gray: "bg-fgpu-stone-600 border-fgpu-stone-700 text-fgpu-white",
+            },
+          },
+        },
+      },
+      dropdown: {
+        floating: {
+          base: "bg-fgpu-stone-600 border-fgpu-stone-700",
+          content: "py-1 text-fgpu-white",
+          target: "bg-fgpu-stone-600 border-fgpu-stone-700 text-fgpu-white",
+        },
+      },
+      modal: {
+        content: {
+          base: "bg-fgpu-stone-600 border-fgpu-stone-700",
+        },
+      },
+      sidebar: {
+        root: {
+          base: "bg-fgpu-stone-600 border-fgpu-stone-700",
+        },
+      },
+      tab: {
+        base: "bg-fgpu-stone-600",
+        tablist: {
+          base: "bg-fgpu-stone-600 border-fgpu-stone-700",
+          tabitem: {
+            base: "bg-fgpu-stone-600",
+          },
+        },
+      },
+      input: {
+        field: {
+          base: "bg-fgpu-stone-600 border-fgpu-stone-700 text-fgpu-white",
+          input: {
+            base: "bg-fgpu-stone-600 border-fgpu-stone-700 text-fgpu-white",
+            colors: {
+              gray: "bg-fgpu-stone-600 border-fgpu-stone-700 text-fgpu-white",
+            },
+          },
+        },
+      },
+      tooltip: {
+        base: "bg-fgpu-stone-600 border-fgpu-stone-700",
+        content: "bg-fgpu-stone-600 text-fgpu-white",
+      },
     },
+  }
+
+  // Only render children after client-side hydration is complete
+  if (!mounted) {
+    return null
   }
 
   return (
@@ -94,7 +110,10 @@ export default function ClientLayout({
           console.error("Failed to load ApexCharts via Script component")
         }}
       />
-      {mounted && children}
+      {/* Suppress hydration warnings by only rendering after mount */}
+      <div suppressHydrationWarning>
+        {children}
+      </div>
     </Flowbite>
   )
 }

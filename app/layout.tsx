@@ -1,12 +1,12 @@
-import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import type { Metadata } from 'next'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'FarmGPU TCO Calculator',
-  description: 'Calculate the total cost of ownership for GPU farming',
+  title: 'FarmGPU',
+  description: 'Sustainable GPU hosting and AI infrastructure provider',
 }
 
 export default function RootLayout({
@@ -15,11 +15,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark h-full">
-      <body className={`${inter.className} h-full bg-background dark:bg-gray-900`}>
-        <main className="min-h-screen bg-background dark:bg-gray-900">
-          {children}
-        </main>
+    <html lang="en" className="dark">
+      <body suppressHydrationWarning className={`${inter.className} min-h-screen bg-fgpu-black text-fgpu-white`}>
+        {children}
       </body>
     </html>
   )

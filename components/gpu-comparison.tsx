@@ -68,12 +68,12 @@ export function GpuComparison() {
   }
 
   return (
-    <Card className="w-full">
-      <h5 className="text-xl font-bold tracking-tight text-fgpu-black dark:text-fgpu-white flex items-center gap-2">
+    <Card className="w-full bg-fgpu-stone-900 border-fgpu-stone-700">
+      <h5 className="text-xl font-bold tracking-tight text-fgpu-white flex items-center gap-2">
         <HiChip className="text-fgpu-volt" />
         GPU Comparison
       </h5>
-      <p className="font-normal text-fgpu-stone-600 dark:text-fgpu-gray-300">
+      <p className="font-normal text-fgpu-gray-300">
         Compare up to 3 different GPU models side-by-side
       </p>
 
@@ -117,7 +117,7 @@ export function GpuComparison() {
                 checked={secureMode}
                 onChange={() => setSecureMode(!secureMode)}
               />
-              <div className="w-11 h-6 bg-fgpu-stone-200 dark:bg-fgpu-stone-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-fgpu-volt/30 dark:peer-focus:ring-fgpu-volt/20 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-fgpu-volt"></div>
+              <div className="w-11 h-6 bg-fgpu-stone-200 dark:bg-fgpu-stone-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-fgpu-volt/30 dark:peer-focus:ring-fgpu-volt/20 rounded-full peer dark:bg-fgpu-stone-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-fgpu-stone-600 peer-checked:bg-fgpu-volt"></div>
               <span className="ms-1 text-sm font-medium text-fgpu-black dark:text-fgpu-white">
                 {secureMode ? (
                   <span className="flex items-center gap-1">
@@ -136,7 +136,7 @@ export function GpuComparison() {
             value=""
             onChange={(e) => handleSelectGpu(e.target.value)}
             disabled={selectedGpus.length >= 3}
-            className="bg-white dark:bg-fgpu-stone-700 text-fgpu-black dark:text-fgpu-white border-fgpu-stone-300 dark:border-fgpu-stone-600"
+            className="bg-fgpu-stone-600 border-fgpu-stone-700 text-fgpu-white"
           >
             <option value="">Add GPU to compare</option>
             <optgroup label="Data Center">
@@ -172,7 +172,7 @@ export function GpuComparison() {
             <Button
               color="light"
               onClick={() => setSelectedGpus([])}
-              className="flex items-center gap-2 bg-fgpu-stone-100 hover:bg-fgpu-stone-200 dark:bg-fgpu-stone-700 dark:hover:bg-fgpu-stone-600 text-fgpu-black dark:text-fgpu-white"
+              className="flex items-center gap-2 bg-fgpu-stone-600 hover:bg-fgpu-stone-700 text-fgpu-white"
             >
               <HiTrash />
               Clear All
@@ -211,7 +211,7 @@ export function GpuComparison() {
                     ))}
                   </tr>
                   {providerPaysOpex && (
-                    <tr className="border-b border-fgpu-gray-300 dark:border-fgpu-stone-700 bg-fgpu-gray-100 dark:bg-fgpu-stone-700/50">
+                    <tr className="border-b border-fgpu-gray-300 dark:border-fgpu-stone-700 bg-fgpu-stone-600">
                       <td className="py-2 text-fgpu-volt dark:text-fgpu-volt font-medium">OPEX Model</td>
                       {selectedGpuData.map((gpu) => (
                         <td key={gpu.id} className="py-2 text-fgpu-volt dark:text-fgpu-volt">
