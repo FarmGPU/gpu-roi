@@ -16,6 +16,7 @@ import {
   HiShieldCheck,
   HiCash,
 } from "react-icons/hi"
+import { Slider } from "@/components/ui/slider"
 
 export function GpuCalculator() {
   const [selectedGpu, setSelectedGpu] = useState(gpuData[0].id)
@@ -218,25 +219,29 @@ export function GpuCalculator() {
                   <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">Idle</span>
                   <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{idlePercentage}%</span>
                 </div>
-                <input
-                  type="range"
+                <Slider
+                  value={[idlePercentage]}
                   min={0}
                   max={100}
-                  step={5}
-                  value={idlePercentage}
-                  onChange={(e) => {
-                    const newValue = Number.parseInt(e.target.value)
+                  step={1}
+                  onValueChange={(values) => {
+                    const newValue = values[0]
                     setIdlePercentage(newValue)
-                    // Adjust other values to maintain total of 100%
+                    // Adjust other values proportionally to maintain total of 100%
                     const remaining = 100 - newValue
-                    const ratio =
-                      spotPercentage + onDemandPercentage === 0
-                        ? 0.5
-                        : spotPercentage / (spotPercentage + onDemandPercentage)
-                    setSpotPercentage(Math.round(remaining * ratio))
-                    setOnDemandPercentage(Math.round(remaining * (1 - ratio)))
+                    const currentTotal = spotPercentage + onDemandPercentage
+                    if (currentTotal > 0) {
+                      const spotRatio = spotPercentage / currentTotal
+                      const newSpot = Math.round(remaining * spotRatio)
+                      setSpotPercentage(newSpot)
+                      setOnDemandPercentage(remaining - newSpot)
+                    } else {
+                      // If both are 0, split remaining evenly
+                      setSpotPercentage(Math.round(remaining / 2))
+                      setOnDemandPercentage(Math.round(remaining / 2))
+                    }
                   }}
-                  className="w-full h-2 bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer"
+                  className="w-full"
                 />
               </div>
 
@@ -245,20 +250,17 @@ export function GpuCalculator() {
                   <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">Spot</span>
                   <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{spotPercentage}%</span>
                 </div>
-                <input
-                  type="range"
+                <Slider
+                  value={[spotPercentage]}
                   min={0}
-                  max={100}
-                  step={5}
-                  value={spotPercentage}
-                  onChange={(e) => {
-                    const newValue = Number.parseInt(e.target.value)
+                  max={100 - idlePercentage}
+                  step={1}
+                  onValueChange={(values) => {
+                    const newValue = values[0]
                     setSpotPercentage(newValue)
-                    // Adjust on-demand to maintain total of 100%
-                    const remaining = 100 - idlePercentage - newValue
-                    setOnDemandPercentage(Math.max(0, remaining))
+                    setOnDemandPercentage(100 - idlePercentage - newValue)
                   }}
-                  className="w-full h-2 bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer"
+                  className="w-full"
                 />
               </div>
 
@@ -267,20 +269,17 @@ export function GpuCalculator() {
                   <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">On-Demand</span>
                   <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{onDemandPercentage}%</span>
                 </div>
-                <input
-                  type="range"
+                <Slider
+                  value={[onDemandPercentage]}
                   min={0}
-                  max={100}
-                  step={5}
-                  value={onDemandPercentage}
-                  onChange={(e) => {
-                    const newValue = Number.parseInt(e.target.value)
+                  max={100 - idlePercentage}
+                  step={1}
+                  onValueChange={(values) => {
+                    const newValue = values[0]
                     setOnDemandPercentage(newValue)
-                    // Adjust spot to maintain total of 100%
-                    const remaining = 100 - idlePercentage - newValue
-                    setSpotPercentage(Math.max(0, remaining))
+                    setSpotPercentage(100 - idlePercentage - newValue)
                   }}
-                  className="w-full h-2 bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer"
+                  className="w-full"
                 />
               </div>
             </div>
@@ -310,14 +309,13 @@ export function GpuCalculator() {
                   <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">Platform Fee</span>
                   <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{platformFeePercentage}%</span>
                 </div>
-                <input
-                  type="range"
+                <Slider
+                  value={[platformFeePercentage]}
                   min={5}
                   max={40}
                   step={1}
-                  value={platformFeePercentage}
-                  onChange={(e) => setPlatformFeePercentage(Number.parseInt(e.target.value))}
-                  className="w-full h-2 bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer"
+                  onValueChange={(values) => setPlatformFeePercentage(values[0])}
+                  className="w-full"
                 />
               </div>
 
@@ -328,14 +326,13 @@ export function GpuCalculator() {
                   </span>
                   <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{ownerSharePercentage}%</span>
                 </div>
-                <input
-                  type="range"
+                <Slider
+                  value={[ownerSharePercentage]}
                   min={10}
                   max={90}
-                  step={5}
-                  value={ownerSharePercentage}
-                  onChange={(e) => setOwnerSharePercentage(Number.parseInt(e.target.value))}
-                  className="w-full h-2 bg-fgpu-stone-700 rounded-lg appearance-none cursor-pointer"
+                  step={1}
+                  onValueChange={(values) => setOwnerSharePercentage(values[0])}
+                  className="w-full"
                 />
               </div>
 
