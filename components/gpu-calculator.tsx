@@ -18,7 +18,6 @@ import {
 } from "react-icons/hi"
 
 export function GpuCalculator() {
-  const providerPaysOpex = true // Provider pays for operational expenses
   const [selectedGpu, setSelectedGpu] = useState(gpuData[0].id)
   const [contractDuration, setContractDuration] = useState(3)
   const [idlePercentage, setIdlePercentage] = useState(10)
@@ -101,38 +100,39 @@ export function GpuCalculator() {
               </Badge>
             </div>
             <Select
-              id="gpu-model"
+              id="gpu"
               value={selectedGpu}
               onChange={(e) => setSelectedGpu(e.target.value)}
-              className="bg-fgpu-stone-600 border-fgpu-stone-700 text-fgpu-white"
+              className="bg-fgpu-stone-900 text-fgpu-gray-300 border-fgpu-stone-700"
             >
-              <option value="" disabled>
-                Select a GPU
-              </option>
-              <optgroup label="Data Center">
+              <option value="" disabled>Select a GPU</option>
+              {/* Data Center GPUs */}
+              <optgroup label="Data Center GPUs" className="bg-fgpu-stone-900 text-fgpu-gray-300">
                 {gpuData
-                  .filter((g) => g.cardType === "Data Center")
+                  .filter((gpu) => gpu.cardType === "Data Center")
                   .map((gpu) => (
-                    <option key={gpu.id} value={gpu.id}>
-                      {gpu.name} - ${gpu.price.toLocaleString()}
+                    <option key={gpu.id} value={gpu.id} className="bg-fgpu-stone-900">
+                      {gpu.name}
                     </option>
                   ))}
               </optgroup>
-              <optgroup label="Workstation">
+              {/* Consumer GPUs */}
+              <optgroup label="Consumer GPUs" className="bg-fgpu-stone-900 text-fgpu-gray-300">
                 {gpuData
-                  .filter((g) => g.cardType === "Workstation")
+                  .filter((gpu) => gpu.cardType === "Consumer")
                   .map((gpu) => (
-                    <option key={gpu.id} value={gpu.id}>
-                      {gpu.name} - ${gpu.price.toLocaleString()}
+                    <option key={gpu.id} value={gpu.id} className="bg-fgpu-stone-900">
+                      {gpu.name}
                     </option>
                   ))}
               </optgroup>
-              <optgroup label="Consumer">
+              {/* Workstation GPUs */}
+              <optgroup label="Workstation GPUs" className="bg-fgpu-stone-900 text-fgpu-gray-300">
                 {gpuData
-                  .filter((g) => g.cardType === "Consumer")
+                  .filter((gpu) => gpu.cardType === "Workstation")
                   .map((gpu) => (
-                    <option key={gpu.id} value={gpu.id}>
-                      {gpu.name} - ${gpu.price.toLocaleString()}
+                    <option key={gpu.id} value={gpu.id} className="bg-fgpu-stone-900">
+                      {gpu.name}
                     </option>
                   ))}
               </optgroup>
@@ -150,9 +150,9 @@ export function GpuCalculator() {
             </div>
             <Select
               id="contract-duration"
-              value={contractDuration.toString()}
+              value={contractDuration}
               onChange={(e) => setContractDuration(Number.parseInt(e.target.value))}
-              className="bg-fgpu-stone-600 border-fgpu-stone-700 text-fgpu-white"
+              className="bg-fgpu-stone-900 text-fgpu-gray-300 border-fgpu-stone-700"
             >
               <option value="1">1 Year</option>
               <option value="2">2 Years</option>
@@ -409,7 +409,6 @@ export function GpuCalculator() {
                 roi={roi}
                 paybackMonths={paybackMonths}
                 contractDuration={contractDuration}
-                providerPaysOpex={providerPaysOpex}
               />
             )}
 
@@ -420,7 +419,6 @@ export function GpuCalculator() {
                 idlePowerConsumption={gpu.idlePowerConsumption}
                 idlePercentage={idlePercentage}
                 contractDuration={contractDuration}
-                providerPaysOpex={providerPaysOpex}
               />
             )}
           </div>
