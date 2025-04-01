@@ -28,7 +28,7 @@ export function TCOBreakdown({
   contractDuration,
 }: TCOBreakdownProps) {
   // TCO configuration
-  const [powerCost, setPowerCost] = useState(0.12) // per kWh
+  const [powerCost, setPowerCost] = useState(0.24) // per kWh
   const [rackspaceCost, setRackspaceCost] = useState(200) // per month per rack
   const [networkCost, setNetworkCost] = useState(200) // per month per rack
   const [gpusPerRack, setGpusPerRack] = useState(16) // GPUs per rack

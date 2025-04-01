@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, Select, Button, Label, Tooltip, Badge } from "flowbite-react"
 import { gpuData } from "@/data/gpu-data"
 import { FinancialMetrics } from "@/components/financial-metrics"
@@ -20,16 +20,24 @@ import { Slider } from "@/components/ui/slider"
 
 export function GpuCalculator() {
   const [selectedGpu, setSelectedGpu] = useState(gpuData[0].id)
-  const [contractDuration, setContractDuration] = useState(3)
-  const [idlePercentage, setIdlePercentage] = useState(10)
-  const [spotPercentage, setSpotPercentage] = useState(20)
-  const [onDemandPercentage, setOnDemandPercentage] = useState(70)
+  const [contractDuration, setContractDuration] = useState(5)
+  const [idlePercentage, setIdlePercentage] = useState(5)
+  const [spotPercentage, setSpotPercentage] = useState(10)
+  const [onDemandPercentage, setOnDemandPercentage] = useState(85)
   const [secureMode, setSecureMode] = useState(true)
   const [platformFeePercentage, setPlatformFeePercentage] = useState(20)
-  const [ownerSharePercentage, setOwnerSharePercentage] = useState(50)
+  const [ownerSharePercentage, setOwnerSharePercentage] = useState(() => {
+    const gpu = gpuData.find((g) => g.id === selectedGpu) || gpuData[0]
+    return gpu.cardType === "Consumer" ? 50 : 70
+  })
   const [activeTab, setActiveTab] = useState("overview")
 
   const gpu = gpuData.find((g) => g.id === selectedGpu) || gpuData[0]
+
+  // Update owner share when GPU changes
+  useEffect(() => {
+    setOwnerSharePercentage(gpu.cardType === "Consumer" ? 50 : 70)
+  }, [selectedGpu])
 
   // Calculate weighted hourly rate based on percentages
   const calculateHourlyRate = useMemo(() => {
