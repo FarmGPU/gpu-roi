@@ -106,6 +106,8 @@ export function GpuCalculator() {
   const [utilizationPercentages, setUtilizationPercentages] = useState({ idle: 10, spot: 30, onDemand: 60 });
   const [revenueSplit, setRevenueSplit] = useState({ platform: 10, owner: 80, provider: 10 });
   const [powerCost, setPowerCost] = useState(0.15); // $/kWh
+  const [serverCost, setServerCost] = useState(5000); // Server cost in dollars
+  const [gpusPerServer, setGpusPerServer] = useState(8); // Number of GPUs per server
 
   const gpu = useMemo(() => gpuData.find((g) => g.id === selectedGpu) || gpuData[0], [selectedGpu]);
 
@@ -150,7 +152,8 @@ export function GpuCalculator() {
   const totalOwnerRevenue = ownerRevenue * contractDuration
 
   // Calculate TCO
-  const initialCost = gpu.price
+  const serverCostPerGpu = serverCost / gpusPerServer;
+  const initialCost = gpu.price + serverCostPerGpu;
 
   // Calculate ROI and Payback
   const profit = totalOwnerRevenue - initialCost // Only consider initial cost when provider pays OPEX
@@ -211,12 +214,13 @@ export function GpuCalculator() {
 
     // --- IRR Calculation ---
     const cashFlows: number[] = [];
-    cashFlows.push(-gpu.price); // Year 0: Initial Investment
+    // Include server cost per GPU in initial investment
+    cashFlows.push(-(gpu.price + serverCost / gpusPerServer)); // Year 0: Initial Investment
 
     // Add annual profit for each year up to contract duration
     for (let i = 1; i <= contractDuration; i++) {
         if (i === contractDuration) {
-             // Add residual value in the last year
+             // Add residual value in the last year (apply to GPU only, not server)
             cashFlows.push(annualProfit + gpu.price * (residualValues as any)[`year${Math.min(i, 3)}`]);
         } else {
             cashFlows.push(annualProfit);
@@ -225,8 +229,9 @@ export function GpuCalculator() {
 
     const irr = calculateIRR(cashFlows);
 
-    // Calculate Payback Period (Simple)
-    const paybackYears = annualProfit > 0 ? gpu.price / annualProfit : Infinity;
+    // Calculate Payback Period (Simple) - updated to include server cost per GPU
+    const totalInvestment = gpu.price + serverCost / gpusPerServer;
+    const paybackYears = annualProfit > 0 ? totalInvestment / annualProfit : Infinity;
 
     return {
       ownerAnnualRevenue,
@@ -238,7 +243,7 @@ export function GpuCalculator() {
       paybackYears,
       irr, // Add IRR to returned metrics
     };
-  }, [gpu, rentalType, utilizationPercentages, revenueSplit, hostingCost, powerCost, residualValues, contractDuration]);
+  }, [gpu, rentalType, utilizationPercentages, revenueSplit, hostingCost, powerCost, residualValues, contractDuration, serverCost, gpusPerServer]);
 
   // Handler for GPU select (corrected type)
   const handleGpuChange = (value: string) => {
@@ -277,414 +282,448 @@ export function GpuCalculator() {
 
   return (
     <Card className="w-full bg-fgpu-stone-900 border-fgpu-stone-700">
-      <h5 className="text-xl font-bold tracking-tight text-fgpu-white flex items-center gap-2">
-        <HiChip className="text-fgpu-volt" />
-        GPU Investment Calculator
-      </h5>
-      <p className="font-normal text-fgpu-gray-300">
-        Calculate the total cost of ownership, expected revenue, and return on investment
-      </p>
+      <div className="p-4">
+        <h5 className="text-xl font-bold tracking-tight text-fgpu-white flex items-center gap-2">
+          <HiChip className="text-fgpu-volt" />
+          GPU Investment Calculator
+        </h5>
+        <p className="font-normal text-fgpu-gray-300">
+          Calculate the total cost of ownership, expected revenue, and return on investment
+        </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <HiChip className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
-              <Label htmlFor="gpu-select" className="text-fgpu-stone-600 dark:text-fgpu-gray-300">GPU Model</Label>
-              <Badge
-                color={gpu.cardType === "Data Center" ? "blue" : gpu.cardType === "Workstation" ? "purple" : "gray"}
-                className="ml-auto"
-              >
-                {gpu.cardType}
-              </Badge>
-            </div>
-            <Select onValueChange={handleGpuChange} defaultValue={selectedGpu}>
-              <SelectTrigger id="gpu-select">
-                  <SelectValue placeholder="Select a GPU" />
-              </SelectTrigger>
-              <SelectContent>
-                <Label className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">Data Center GPUs</Label>
-                {gpuData
-                  .filter((gpu) => gpu.cardType === "Data Center")
-                  .map((gpu) => (
-                    <SelectItem key={gpu.id} value={gpu.id}>
-                      {gpu.name} (${gpu.price.toLocaleString()})
-                    </SelectItem>
-                  ))}
-                <Label className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">Consumer GPUs</Label>
-                {gpuData
-                  .filter((gpu) => gpu.cardType === "Consumer")
-                  .map((gpu) => (
-                    <SelectItem key={gpu.id} value={gpu.id}>
-                      {gpu.name} (${gpu.price.toLocaleString()})
-                    </SelectItem>
-                  ))}
-                <Label className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">Workstation GPUs</Label>
-                {gpuData
-                  .filter((gpu) => gpu.cardType === "Workstation")
-                  .map((gpu) => (
-                    <SelectItem key={gpu.id} value={gpu.id}>
-                      {gpu.name} (${gpu.price.toLocaleString()})
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <HiClock className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
-              <Label
-                htmlFor="contract-duration"
-                className="text-fgpu-stone-600 dark:text-fgpu-gray-300"
-              >Contract Duration (Years)</Label>
-            </div>
-            <Select onValueChange={handleContractDurationChange} defaultValue={contractDuration.toString()}>
-              <SelectTrigger id="contract-duration">
-                <SelectValue placeholder="Select Duration" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="2">2 Years</SelectItem>
-                <SelectItem value="3">3 Years</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+          <div className="space-y-6">
+            <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <HiServer className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
+                <HiChip className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
+                <Label htmlFor="gpu-select" className="text-fgpu-stone-600 dark:text-fgpu-gray-300">GPU Model</Label>
+                <Badge
+                  color={gpu.cardType === "Data Center" ? "blue" : gpu.cardType === "Workstation" ? "purple" : "gray"}
+                  className="ml-auto"
+                >
+                  {gpu.cardType}
+                </Badge>
+              </div>
+              <Select onValueChange={handleGpuChange} defaultValue={selectedGpu}>
+                <SelectTrigger id="gpu-select">
+                    <SelectValue placeholder="Select a GPU" />
+                </SelectTrigger>
+                <SelectContent>
+                  <Label className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">Data Center GPUs</Label>
+                  {gpuData
+                    .filter((gpu) => gpu.cardType === "Data Center")
+                    .map((gpu) => (
+                      <SelectItem key={gpu.id} value={gpu.id}>
+                        {gpu.name} (${gpu.price.toLocaleString()})
+                      </SelectItem>
+                    ))}
+                  <Label className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">Consumer GPUs</Label>
+                  {gpuData
+                    .filter((gpu) => gpu.cardType === "Consumer")
+                    .map((gpu) => (
+                      <SelectItem key={gpu.id} value={gpu.id}>
+                        {gpu.name} (${gpu.price.toLocaleString()})
+                      </SelectItem>
+                    ))}
+                  <Label className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">Workstation GPUs</Label>
+                  {gpuData
+                    .filter((gpu) => gpu.cardType === "Workstation")
+                    .map((gpu) => (
+                      <SelectItem key={gpu.id} value={gpu.id}>
+                        {gpu.name} (${gpu.price.toLocaleString()})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="server-cost" className="text-fgpu-stone-600 dark:text-fgpu-gray-300">
+                  Server Cost ($)
+                </Label>
+                <Input
+                  id="server-cost"
+                  type="number"
+                  min="0"
+                  value={serverCost}
+                  onChange={(e) => setServerCost(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="dark:bg-fgpu-stone-700 dark:border-fgpu-stone-600 dark:text-white"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="gpus-per-server" className="text-fgpu-stone-600 dark:text-fgpu-gray-300">
+                  GPUs per Server
+                </Label>
+                <Input
+                  id="gpus-per-server"
+                  type="number"
+                  min="1"
+                  value={gpusPerServer}
+                  onChange={(e) => setGpusPerServer(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="dark:bg-fgpu-stone-700 dark:border-fgpu-stone-600 dark:text-white"
+                />
+              </div>
+              <div className="col-span-2 text-xs text-fgpu-stone-500 dark:text-fgpu-gray-400 mt-1">
+                Total initial investment: ${initialCost.toLocaleString()} per GPU (${gpu.price.toLocaleString()} + ${serverCostPerGpu.toLocaleString()} server cost)
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <HiClock className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
                 <Label
-                  htmlFor="rental-type-select"
+                  htmlFor="contract-duration"
                   className="text-fgpu-stone-600 dark:text-fgpu-gray-300"
-                >Rental Type</Label>
+                >Contract Duration (Years)</Label>
               </div>
-              <div className="flex items-center gap-2">
-                <Select
-                  onValueChange={handleRentalTypeChange}
-                  defaultValue={rentalType}
-                >
-                  <SelectTrigger id="rental-type-select">
-                    <SelectValue placeholder="Select Rental Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="community">Community</SelectItem>
-                    <SelectItem value="secure">Secure</SelectItem>
-                  </SelectContent>
-                </Select>
+              <Select onValueChange={handleContractDurationChange} defaultValue={contractDuration.toString()}>
+                <SelectTrigger id="contract-duration">
+                  <SelectValue placeholder="Select Duration" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2">2 Years</SelectItem>
+                  <SelectItem value="3">3 Years</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <HiServer className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
+                  <Label
+                    htmlFor="rental-type-select"
+                    className="text-fgpu-stone-600 dark:text-fgpu-gray-300"
+                  >Rental Type</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select
+                    onValueChange={handleRentalTypeChange}
+                    defaultValue={rentalType}
+                  >
+                    <SelectTrigger id="rental-type-select">
+                      <SelectValue placeholder="Select Rental Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="community">Community</SelectItem>
+                      <SelectItem value="secure">Secure</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="space-y-4 p-4 bg-fgpu-stone-600 rounded-lg">
-            <h3 className="text-sm font-medium text-fgpu-gray-300 flex items-center gap-2">
-              <HiLightningBolt className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
-              Usage Distribution
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HiInformationCircle className="text-gray-400" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Set the percentage of time your GPU will be idle, running spot jobs, or on-demand jobs</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </h3>
+            <div className="space-y-4 p-4 bg-fgpu-stone-600 rounded-lg">
+              <h3 className="text-sm font-medium text-fgpu-gray-300 flex items-center gap-2">
+                <HiLightningBolt className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
+                Usage Distribution
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HiInformationCircle className="text-gray-400" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Set the percentage of time your GPU will be idle, running spot jobs, or on-demand jobs</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </h3>
 
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">Idle</span>
-                  <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{idlePercentage}%</span>
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">Idle</span>
+                    <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{idlePercentage}%</span>
+                  </div>
+                  <Slider
+                    value={[idlePercentage]}
+                    min={0}
+                    max={100}
+                    step={1}
+                    onValueChange={(values) => {
+                      const newValue = values[0]
+                      setIdlePercentage(newValue)
+                      // Adjust other values proportionally to maintain total of 100%
+                      const remaining = 100 - newValue
+                      const currentTotal = spotPercentage + onDemandPercentage
+                      if (currentTotal > 0) {
+                        const spotRatio = spotPercentage / currentTotal
+                        const newSpot = Math.round(remaining * spotRatio)
+                        setSpotPercentage(newSpot)
+                        setOnDemandPercentage(remaining - newSpot)
+                        // Update utilizationPercentages too
+                        setUtilizationPercentages({
+                          idle: newValue,
+                          spot: newSpot,
+                          onDemand: remaining - newSpot
+                        })
+                      } else {
+                        // If both are 0, split remaining evenly
+                        const newSpot = Math.round(remaining / 2)
+                        const newOnDemand = Math.round(remaining / 2)
+                        setSpotPercentage(newSpot)
+                        setOnDemandPercentage(newOnDemand)
+                        // Update utilizationPercentages too
+                        setUtilizationPercentages({
+                          idle: newValue,
+                          spot: newSpot,
+                          onDemand: newOnDemand
+                        })
+                      }
+                    }}
+                    className="w-full"
+                  />
                 </div>
-                <Slider
-                  value={[idlePercentage]}
-                  min={0}
-                  max={100}
-                  step={1}
-                  onValueChange={(values) => {
-                    const newValue = values[0]
-                    setIdlePercentage(newValue)
-                    // Adjust other values proportionally to maintain total of 100%
-                    const remaining = 100 - newValue
-                    const currentTotal = spotPercentage + onDemandPercentage
-                    if (currentTotal > 0) {
-                      const spotRatio = spotPercentage / currentTotal
-                      const newSpot = Math.round(remaining * spotRatio)
-                      setSpotPercentage(newSpot)
-                      setOnDemandPercentage(remaining - newSpot)
+
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">Spot</span>
+                    <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{spotPercentage}%</span>
+                  </div>
+                  <Slider
+                    value={[spotPercentage]}
+                    min={0}
+                    max={100 - idlePercentage}
+                    step={1}
+                    onValueChange={(values) => {
+                      const newValue = values[0]
+                      setSpotPercentage(newValue)
+                      setOnDemandPercentage(100 - idlePercentage - newValue)
                       // Update utilizationPercentages too
                       setUtilizationPercentages({
-                        idle: newValue,
-                        spot: newSpot,
-                        onDemand: remaining - newSpot
+                        idle: idlePercentage,
+                        spot: newValue,
+                        onDemand: 100 - idlePercentage - newValue
                       })
-                    } else {
-                      // If both are 0, split remaining evenly
-                      const newSpot = Math.round(remaining / 2)
-                      const newOnDemand = Math.round(remaining / 2)
-                      setSpotPercentage(newSpot)
-                      setOnDemandPercentage(newOnDemand)
+                    }}
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">On-Demand</span>
+                    <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{onDemandPercentage}%</span>
+                  </div>
+                  <Slider
+                    value={[onDemandPercentage]}
+                    min={0}
+                    max={100 - idlePercentage}
+                    step={1}
+                    onValueChange={(values) => {
+                      const newValue = values[0]
+                      setOnDemandPercentage(newValue)
+                      setSpotPercentage(100 - idlePercentage - newValue)
                       // Update utilizationPercentages too
                       setUtilizationPercentages({
-                        idle: newValue,
-                        spot: newSpot,
-                        onDemand: newOnDemand
+                        idle: idlePercentage,
+                        spot: 100 - idlePercentage - newValue,
+                        onDemand: newValue
                       })
-                    }
-                  }}
-                  className="w-full"
-                />
-              </div>
-
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">Spot</span>
-                  <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{spotPercentage}%</span>
+                    }}
+                    className="w-full"
+                  />
                 </div>
-                <Slider
-                  value={[spotPercentage]}
-                  min={0}
-                  max={100 - idlePercentage}
-                  step={1}
-                  onValueChange={(values) => {
-                    const newValue = values[0]
-                    setSpotPercentage(newValue)
-                    setOnDemandPercentage(100 - idlePercentage - newValue)
-                    // Update utilizationPercentages too
-                    setUtilizationPercentages({
-                      idle: idlePercentage,
-                      spot: newValue,
-                      onDemand: 100 - idlePercentage - newValue
-                    })
-                  }}
-                  className="w-full"
-                />
               </div>
 
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">On-Demand</span>
-                  <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{onDemandPercentage}%</span>
-                </div>
-                <Slider
-                  value={[onDemandPercentage]}
-                  min={0}
-                  max={100 - idlePercentage}
-                  step={1}
-                  onValueChange={(values) => {
-                    const newValue = values[0]
-                    setOnDemandPercentage(newValue)
-                    setSpotPercentage(100 - idlePercentage - newValue)
-                    // Update utilizationPercentages too
-                    setUtilizationPercentages({
-                      idle: idlePercentage,
-                      spot: 100 - idlePercentage - newValue,
-                      onDemand: newValue
-                    })
-                  }}
-                  className="w-full"
-                />
-              </div>
-            </div>
-
-            <div className="mt-3 pt-3 border-t border-fgpu-stone-700">
-              <div className="flex justify-between">
-                <span className="text-sm font-medium text-fgpu-stone-600 dark:text-fgpu-gray-300">
-                  Effective Hourly Rate:
-                </span>
-                <span className="text-sm font-medium text-fgpu-volt">${hourlyRate.toFixed(3)}/hr</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4 p-4 bg-fgpu-stone-600 rounded-lg">
-            <h3 className="text-sm font-medium text-fgpu-gray-300 flex items-center gap-2">
-              <HiCurrencyDollar className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
-              Revenue Sharing
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HiInformationCircle className="text-gray-400" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Set how revenue is split between the platform, owner (investor), and provider (data center)</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </h3>
-
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">Platform Fee</span>
-                  <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{platformFeePercentage}%</span>
-                </div>
-                <Slider
-                  value={[platformFeePercentage]}
-                  min={5}
-                  max={40}
-                  step={1}
-                  onValueChange={(values) => setPlatformFeePercentage(values[0])}
-                  className="w-full"
-                />
-              </div>
-
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">
-                    Owner Share (of remaining)
+              <div className="mt-3 pt-3 border-t border-fgpu-stone-700">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-fgpu-stone-600 dark:text-fgpu-gray-300">
+                    Effective Hourly Rate:
                   </span>
-                  <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{ownerSharePercentage}%</span>
-                </div>
-                <Slider
-                  value={[ownerSharePercentage]}
-                  min={10}
-                  max={90}
-                  step={1}
-                  onValueChange={(values) => setOwnerSharePercentage(values[0])}
-                  className="w-full"
-                />
-              </div>
-
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">
-                    Provider Share (of remaining)
-                  </span>
-                  <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">
-                    {100 - ownerSharePercentage}%
-                  </span>
-                </div>
-                <div className="w-full h-2 bg-fgpu-stone-700 rounded-lg">
-                  <div
-                    className="h-2 bg-fgpu-volt rounded-lg"
-                    style={{ width: `${100 - ownerSharePercentage}%` }}
-                  ></div>
+                  <span className="text-sm font-medium text-fgpu-volt">${hourlyRate.toFixed(3)}/hr</span>
                 </div>
               </div>
             </div>
 
-            <div className="mt-3 pt-3 border-t border-fgpu-stone-700">
-              <div className="flex justify-between">
-                <span className="text-sm font-medium text-fgpu-stone-600 dark:text-fgpu-gray-300">
-                  Annual Owner Revenue:
-                </span>
-                <span className="text-sm font-medium text-fgpu-volt">${ownerRevenue.toFixed(0)}/year</span>
+            <div className="space-y-4 p-4 bg-fgpu-stone-600 rounded-lg">
+              <h3 className="text-sm font-medium text-fgpu-gray-300 flex items-center gap-2">
+                <HiCurrencyDollar className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
+                Revenue Sharing
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HiInformationCircle className="text-gray-400" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Set how revenue is split between the platform, owner (investor), and provider (data center)</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </h3>
+
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">Platform Fee</span>
+                    <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{platformFeePercentage}%</span>
+                  </div>
+                  <Slider
+                    value={[platformFeePercentage]}
+                    min={5}
+                    max={40}
+                    step={1}
+                    onValueChange={(values) => setPlatformFeePercentage(values[0])}
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">
+                      Owner Share (of remaining)
+                    </span>
+                    <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{ownerSharePercentage}%</span>
+                  </div>
+                  <Slider
+                    value={[ownerSharePercentage]}
+                    min={10}
+                    max={90}
+                    step={1}
+                    onValueChange={(values) => setOwnerSharePercentage(values[0])}
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">
+                      Provider Share (of remaining)
+                    </span>
+                    <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">
+                      {100 - ownerSharePercentage}%
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-fgpu-stone-700 rounded-lg">
+                    <div
+                      className="h-2 bg-fgpu-volt rounded-lg"
+                      style={{ width: `${100 - ownerSharePercentage}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 pt-3 border-t border-fgpu-stone-700">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-fgpu-stone-600 dark:text-fgpu-gray-300">
+                    Annual Owner Revenue:
+                  </span>
+                  <span className="text-sm font-medium text-fgpu-volt">${ownerRevenue.toFixed(0)}/year</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Advanced Mode Toggle */}
-          <div className="flex items-center space-x-2 mt-4">
-            <Switch
-              id="advanced-mode"
-              checked={advancedMode}
-              onCheckedChange={setAdvancedMode}
-            />
-            <Label htmlFor="advanced-mode">Advanced Mode</Label>
-          </div>
-
-          {/* Residual Value Input (Conditional) */}
-          {advancedMode && (
-              <div className="grid gap-4 mt-4 p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50">
-                  <h4 className="text-md font-medium mb-2 text-gray-600 dark:text-gray-400">Residual Value (% of Original Price)</h4>
-                  <div className="space-y-3">
-                      <div className="flex justify-between mb-1">
-                          <Label htmlFor="residual-slider" className="text-sm text-gray-600 dark:text-gray-400">
-                            Year {contractDuration} Residual
-                          </Label>
-                          <span className="text-sm text-gray-500 dark:text-gray-400">
-                            {Math.round(residualValues[`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues] * 100)}%
-                          </span>
-                      </div>
-                      <Slider
-                          id="residual-slider"
-                          value={[residualValues[`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues] * 100]}
-                          min={0}
-                          max={100}
-                          step={1}
-                          onValueChange={(values) => {
-                              const newValue = (values[0] / 100).toString();
-                              handleResidualValueChange(`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues, newValue);
-                          }}
-                          className="w-full"
-                      />
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Estimated resale value after {contractDuration} years
-                      </p>
-                  </div>
-              </div>
-          )}
-        </div>
-
-        <div className="md:col-span-2">
-          <div className="mb-4 border-b border-fgpu-gray-300 dark:border-fgpu-stone-700">
-            <ul className="flex flex-wrap -mb-px text-sm font-medium text-center" role="tablist">
-              <li className="mr-2" role="presentation">
-                <button
-                  className={`inline-block p-4 border-b-2 rounded-t-lg ${activeTab === "overview" ? "text-fgpu-volt border-fgpu-volt dark:text-fgpu-volt dark:border-fgpu-volt" : "hover:text-fgpu-stone-600 hover:border-fgpu-stone-300 dark:hover:text-fgpu-gray-300"}`}
-                  onClick={() => setActiveTab("overview")}
-                  type="button"
-                  role="tab"
-                >
-                  <div className="flex items-center">
-                    <HiChip className="mr-2" />
-                    Overview
-                  </div>
-                </button>
-              </li>
-              <li className="mr-2" role="presentation">
-                <button
-                  className={`inline-block p-4 border-b-2 rounded-t-lg ${activeTab === "tco" ? "text-fgpu-volt border-fgpu-volt dark:text-fgpu-volt dark:border-fgpu-volt" : "hover:text-fgpu-stone-600 hover:border-fgpu-stone-300 dark:hover:text-fgpu-gray-300"}`}
-                  onClick={() => setActiveTab("tco")}
-                  type="button"
-                  role="tab"
-                >
-                  <div className="flex items-center">
-                    <HiCurrencyDollar className="mr-2" />
-                    Provider Costs
-                  </div>
-                </button>
-              </li>
-            </ul>
-          </div>
-
-          <div className="p-4">
-            {activeTab === "overview" && (
-              <FinancialMetrics
-                initialCost={initialCost}
-                totalCost={initialCost}
-                totalRevenue={totalOwnerRevenue}
-                roi={roi}
-                paybackMonths={paybackMonths}
-                contractDuration={contractDuration}
-                irr={financialMetrics.irr}
+            {/* Advanced Mode Toggle */}
+            <div className="flex items-center space-x-2 mt-4">
+              <Switch
+                id="advanced-mode"
+                checked={advancedMode}
+                onCheckedChange={setAdvancedMode}
               />
-            )}
+              <Label htmlFor="advanced-mode">Advanced Mode</Label>
+            </div>
 
-            {activeTab === "tco" && (
-              <TCOBreakdown
-                initialCost={initialCost}
-                powerConsumption={gpu.powerConsumption}
-                idlePowerConsumption={gpu.idlePowerConsumption}
-                idlePercentage={idlePercentage}
-                contractDuration={contractDuration}
-              />
+            {/* Residual Value Input (Conditional) */}
+            {advancedMode && (
+                <div className="grid gap-4 mt-4 p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                    <h4 className="text-md font-medium mb-2 text-gray-600 dark:text-gray-400">Residual Value (% of Original Price)</h4>
+                    <div className="space-y-3">
+                        <div className="flex justify-between mb-1">
+                            <Label htmlFor="residual-slider" className="text-sm text-gray-600 dark:text-gray-400">
+                              Year {contractDuration} Residual
+                            </Label>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                              {Math.round(residualValues[`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues] * 100)}%
+                            </span>
+                        </div>
+                        <Slider
+                            id="residual-slider"
+                            value={[residualValues[`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues] * 100]}
+                            min={0}
+                            max={100}
+                            step={1}
+                            onValueChange={(values) => {
+                                const newValue = (values[0] / 100).toString();
+                                handleResidualValueChange(`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues, newValue);
+                            }}
+                            className="w-full"
+                        />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Estimated resale value after {contractDuration} years
+                        </p>
+                    </div>
+                </div>
             )}
           </div>
-        </div>
-      </div>
 
-      <div className="flex justify-between mt-6">
-        <Button
-          color="light"
-          className="flex items-center gap-2 bg-fgpu-stone-100 hover:bg-fgpu-stone-200 dark:bg-fgpu-stone-700 dark:hover:bg-fgpu-stone-600 text-fgpu-black dark:text-fgpu-white"
-        >
-          <HiRefresh />
-          Reset
-        </Button>
+          <div className="md:col-span-2">
+            <div className="mb-4 border-b border-fgpu-gray-300 dark:border-fgpu-stone-700">
+              <ul className="flex flex-wrap -mb-px text-sm font-medium text-center" role="tablist">
+                <li className="mr-2" role="presentation">
+                  <button
+                    className={`inline-block p-4 border-b-2 rounded-t-lg ${activeTab === "overview" ? "text-fgpu-volt border-fgpu-volt dark:text-fgpu-volt dark:border-fgpu-volt" : "hover:text-fgpu-stone-600 hover:border-fgpu-stone-300 dark:hover:text-fgpu-gray-300"}`}
+                    onClick={() => setActiveTab("overview")}
+                    type="button"
+                    role="tab"
+                  >
+                    <div className="flex items-center">
+                      <HiChip className="mr-2" />
+                      Overview
+                    </div>
+                  </button>
+                </li>
+                <li className="mr-2" role="presentation">
+                  <button
+                    className={`inline-block p-4 border-b-2 rounded-t-lg ${activeTab === "tco" ? "text-fgpu-volt border-fgpu-volt dark:text-fgpu-volt dark:border-fgpu-volt" : "hover:text-fgpu-stone-600 hover:border-fgpu-stone-300 dark:hover:text-fgpu-gray-300"}`}
+                    onClick={() => setActiveTab("tco")}
+                    type="button"
+                    role="tab"
+                  >
+                    <div className="flex items-center">
+                      <HiCurrencyDollar className="mr-2" />
+                      Provider Costs
+                    </div>
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <div className="p-4">
+              {activeTab === "overview" && (
+                <FinancialMetrics
+                  initialCost={initialCost}
+                  totalCost={initialCost}
+                  totalRevenue={totalOwnerRevenue}
+                  roi={roi}
+                  paybackMonths={paybackMonths}
+                  contractDuration={contractDuration}
+                  irr={financialMetrics.irr}
+                />
+              )}
+
+              {activeTab === "tco" && (
+                <TCOBreakdown
+                  initialCost={initialCost}
+                  powerConsumption={gpu.powerConsumption}
+                  idlePowerConsumption={gpu.idlePowerConsumption}
+                  idlePercentage={idlePercentage}
+                  contractDuration={contractDuration}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-between mt-6">
+          <Button
+            color="light"
+            className="flex items-center gap-2 bg-fgpu-stone-100 hover:bg-fgpu-stone-200 dark:bg-fgpu-stone-700 dark:hover:bg-fgpu-stone-600 text-fgpu-black dark:text-fgpu-white"
+          >
+            <HiRefresh />
+            Reset
+          </Button>
+        </div>
       </div>
     </Card>
   )

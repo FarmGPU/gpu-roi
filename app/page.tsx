@@ -42,7 +42,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-8 py-8">
         <section id="calculator" className="mb-12">
           <GpuCalculator />
         </section>
