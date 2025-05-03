@@ -4,6 +4,7 @@ import { Card } from "flowbite-react"
 import { HiArrowUp, HiArrowDown, HiClock, HiCurrencyDollar, HiChartPie, HiInformationCircle, HiTrendingUp } from "react-icons/hi"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts"
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
 interface FinancialMetricsProps {
   initialCost: number
@@ -14,6 +15,7 @@ interface FinancialMetricsProps {
   contractDuration: number
   providerPaysOpex?: boolean
   irr: number | null
+  residualValue: number
   yearlyRevenue?: number[]
   monthlyRevenue?: number[]
 }
@@ -27,17 +29,15 @@ export function FinancialMetrics({
   contractDuration,
   providerPaysOpex = false,
   irr,
+  residualValue,
   yearlyRevenue,
   monthlyRevenue,
 }: FinancialMetricsProps) {
   const profit = totalRevenue - totalCost
   const isProfitable = profit > 0
   const paybackPercentage = Math.min(((contractDuration * 12) / paybackMonths) * 100, 100)
-
-  // Calculate annual revenue (assuming linear distribution if yearly data not provided)
+  // Calculate annual revenue for display and chart fallback
   const annualRevenue = totalRevenue / contractDuration
-  const annualProfit = annualRevenue - (totalCost / contractDuration);
-  const annualROI = initialCost > 0 ? (annualProfit / initialCost) * 100 : 0;
 
   // Generate data for the cumulative revenue chart
   const monthlyRevenueFallback = annualRevenue / 12
@@ -138,21 +138,45 @@ export function FinancialMetrics({
               <h3 className="text-lg font-bold tracking-tight text-fgpu-white flex items-center gap-2">
                 <HiChartPie className="text-fgpu-volt" />
                 Total ROI
-                <button data-tooltip-target="annual-roi-tooltip">
-                  <HiInformationCircle className="text-fgpu-gray-400" />
-                </button>
-                <div
-                  id="annual-roi-tooltip"
-                  role="tooltip"
-                  className="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700"
-                >
-                  Total Return on Investment over the entire contract period, including residual value.
-                  <div className="tooltip-arrow" data-popper-arrow></div>
-                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        className="text-fgpu-gray-400 hover:text-fgpu-volt transition-colors"
+                        onClick={(e) => e.preventDefault()}
+                      >
+                        <HiInformationCircle className="h-5 w-5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          {yearlyRevenue?.map((rev, idx) => (
+                            <p key={idx} className="text-sm text-white">
+                              Year {idx + 1}: ${rev.toLocaleString()}
+                            </p>
+                          ))}
+                          <p className="text-sm text-white">
+                            Residual Impact: ${residualValue.toLocaleString()}
+                          </p>
+                        </div>
+                        <button
+                          className="text-fgpu-gray-400 hover:text-fgpu-volt"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </h3>
             </div>
-            <p className={`text-2xl font-bold ${annualROI >= 0 ? "text-fgpu-volt" : "text-fgpu-stone-500"}`}>
-              {annualROI.toFixed(1)}%
+            <p className={`text-2xl font-bold ${roi >= 0 ? "text-fgpu-volt" : "text-fgpu-stone-500"}`}>
+              {roi.toFixed(1)}%
             </p>
           </Card>
 
@@ -161,17 +185,18 @@ export function FinancialMetrics({
               <h3 className="text-lg font-bold tracking-tight text-fgpu-white flex items-center gap-2">
                 <HiTrendingUp className="text-fgpu-volt" />
                 IRR
-                <button data-tooltip-target="irr-tooltip">
-                  <HiInformationCircle className="text-fgpu-gray-400" />
-                </button>
-                <div
-                  id="irr-tooltip"
-                  role="tooltip"
-                  className="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700"
-                >
-                  Internal Rate of Return based on initial investment and projected cash flows over the contract duration, including residual value.
-                  <div className="tooltip-arrow" data-popper-arrow></div>
-                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HiInformationCircle className="text-fgpu-gray-400 cursor-pointer" />
+                    </TooltipTrigger>
+                    <TooltipContent className="w-64">
+                      <p className="text-sm text-white">
+                        Internal Rate of Return based on initial investment and projected cash flows over the contract duration, including residual value.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </h3>
             </div>
             <p className={`text-2xl font-bold ${irr !== null && irr >= 0 ? "text-fgpu-volt" : "text-fgpu-stone-500"}`}>

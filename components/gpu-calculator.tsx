@@ -13,17 +13,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
-import { HiOutlineQuestionMarkCircle, HiOutlineTrendingUp, HiOutlineCurrencyDollar, HiOutlineClock, HiOutlineFire, HiOutlineAdjustments, HiServer, HiLightningBolt, HiCash } from "react-icons/hi"
+import { HiOutlineQuestionMarkCircle, HiOutlineTrendingUp, HiOutlineCurrencyDollar, HiOutlineClock, HiOutlineFire, HiOutlineAdjustments, HiServer, HiLightningBolt, HiCash, HiClipboard, HiChip, HiClock, HiCurrencyDollar, HiRefresh, HiInformationCircle, HiShieldCheck } from "react-icons/hi"
 import { FinancialMetrics } from "@/components/financial-metrics"
 import { TCOBreakdown } from "@/components/tco-breakdown"
-import {
-  HiChip,
-  HiClock,
-  HiCurrencyDollar,
-  HiRefresh,
-  HiInformationCircle,
-  HiShieldCheck,
-} from "react-icons/hi"
 
 // Helper function to calculate IRR using an iterative approach (Newton-Raphson)
 const calculateIRR = (cashFlows: number[], guess = 0.1, maxIterations = 100, tolerance = 1e-6): number | null => {
@@ -99,6 +91,125 @@ const calculateIRR = (cashFlows: number[], guess = 0.1, maxIterations = 100, tol
   // If we tried all initial guesses and none converged, give up
   return null;
 };
+
+// Add this new component before the GpuCalculator component
+function GpuStats({ gpu, rentalType }: { gpu: GPU, rentalType: "community" | "secure" }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="space-y-6">
+        {/* Performance Stats */}
+        <div className="p-4 bg-fgpu-stone-800 border border-fgpu-stone-700 rounded-lg">
+          <h3 className="text-lg font-bold tracking-tight text-fgpu-white flex items-center gap-2 mb-4">
+            <HiLightningBolt className="text-fgpu-volt" />
+            Performance
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">FP32 TFLOPS</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.fp32Tflops.toFixed(2)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">CUDA Cores</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.cudaCores.toLocaleString()}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">Boost Clock</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.boostClock} GHz</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">Base Clock</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.baseClock} GHz</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Memory Stats */}
+        <div className="p-4 bg-fgpu-stone-800 border border-fgpu-stone-700 rounded-lg">
+          <h3 className="text-lg font-bold tracking-tight text-fgpu-white flex items-center gap-2 mb-4">
+            <HiChip className="text-fgpu-volt" />
+            Memory
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">Memory Size</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.memory} GB</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">Memory Type</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.memoryConfig}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">Memory Bandwidth</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.memoryBandwidth} GB/s</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">PCIe Version</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.pcie}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        {/* Power Stats */}
+        <div className="p-4 bg-fgpu-stone-800 border border-fgpu-stone-700 rounded-lg">
+          <h3 className="text-lg font-bold tracking-tight text-fgpu-white flex items-center gap-2 mb-4">
+            <HiServer className="text-fgpu-volt" />
+            Power & Efficiency
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">Power Consumption</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.powerConsumption}W</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">Idle Power</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.idlePowerConsumption}W</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">TFLOPS/Watt</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.tflopsPerWatt.toFixed(4)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">TFLOPS/$</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.tflopsPerDollar.toFixed(4)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Pricing Stats */}
+        <div className="p-4 bg-fgpu-stone-800 border border-fgpu-stone-700 rounded-lg">
+          <h3 className="text-lg font-bold tracking-tight text-fgpu-white flex items-center gap-2 mb-4">
+            <HiCurrencyDollar className="text-fgpu-volt" />
+            {rentalType === "community" ? "Community" : "Secure"} Pricing
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">Purchase Price</p>
+              <p className="text-lg font-semibold text-fgpu-white">${gpu.price.toLocaleString()}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">Card Type</p>
+              <p className="text-lg font-semibold text-fgpu-white">{gpu.cardType}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">Spot Rate</p>
+              <p className="text-lg font-semibold text-fgpu-white">
+                ${(rentalType === "community" ? gpu.communitySpot : gpu.secureSpot)?.toFixed(2) ?? "N/A"}/hr
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-fgpu-gray-400">On-Demand Rate</p>
+              <p className="text-lg font-semibold text-fgpu-white">
+                ${(rentalType === "community" ? gpu.communityOnDemand : gpu.secureOnDemand)?.toFixed(2) ?? "N/A"}/hr
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function GpuCalculator() {
   const [selectedGpu, setSelectedGpu] = useState(gpuData[0].id)
@@ -268,12 +379,6 @@ export function GpuCalculator() {
     // More accurate payback calculation based on actual monthly data
     const paybackYears = paybackMonth / 12;
 
-    // Initialize yearly net profits array for cash flow calculation
-    const yearlyProfits = Array(contractDuration).fill(0);
-    for (let year = 0; year < contractDuration; year++) {
-      yearlyProfits[year] = yearlyOwnerRevenue[year] - (totalMonthlyCosts * 12);
-    }
-
     // Calculate residual value for financial metrics
     const residualValueKey = `year${Math.min(contractDuration, 3)}` as keyof typeof residualValues;
     const residualGpuValue = gpu.price * residualValues[residualValueKey];
@@ -286,66 +391,22 @@ export function GpuCalculator() {
     // Total residual value
     const totalResidualValue = residualGpuValue + residualServerValue;
 
-    // Calculate total costs for the contract period
-    const totalCosts = totalMonthlyCosts * 12 * contractDuration;
-
-    // Calculate traditional ROI: (Total Return - Initial Investment) / Initial Investment
-    // Where Total Return = Total Revenue + Residual Value - Operating Costs
-    const totalReturn = totalOwnerRevenue + totalResidualValue - totalCosts;
+    // Calculate traditional ROI: ignore OPEX since provider covers operating costs
+    const totalReturn = totalOwnerRevenue + totalResidualValue - totalInvestment;
     const totalROI = (totalReturn / totalInvestment) * 100;
 
-    // Create monthly cash flows for more accurate IRR calculation
-    const monthlyCashFlows: number[] = [-totalInvestment]; // Initial investment (negative)
-
-    // Add monthly profits (revenue - costs)
+    // Build monthly cash flows: initial investment and monthly revenues, adding residual in the final month
+    const monthlyCashFlows: number[] = [-totalInvestment];
     for (let month = 0; month < contractDuration * 12; month++) {
-      // Monthly profit is revenue minus costs
-      const monthlyProfit = monthlyOwnerRevenue[month] - totalMonthlyCosts;
-
-      // For the final month, add the residual value
-      if (month === (contractDuration * 12) - 1) {
-        monthlyCashFlows.push(monthlyProfit + totalResidualValue);
-      } else {
-        monthlyCashFlows.push(monthlyProfit);
-      }
+      const cashFlow = monthlyOwnerRevenue[month];
+      monthlyCashFlows.push(
+        month === contractDuration * 12 - 1
+          ? cashFlow + totalResidualValue
+          : cashFlow
+      );
     }
-
-    // Check if cash flows would lead to payback (should be positive sum if we payback)
-    const sumCashFlows = monthlyCashFlows.reduce((sum, flow) => sum + flow, 0);
-
-    // Sanity check: If payback occurs, the sum should be positive and IRR should be positive
-    let sanityIrr = null;
-    if (paybackMonth < contractDuration * 12 && sumCashFlows > 0) {
-      // Calculate IRR on monthly basis
-      sanityIrr = calculateIRR(monthlyCashFlows);
-
-      // If IRR calculation returns negative but we have payback, there's likely an issue
-      // In this case, attempt a simpler IRR calculation method
-      if (sanityIrr === null || sanityIrr < 0) {
-        // Try a simplified IRR calculation for cases where the standard method fails
-        // This approximation works better for typical investment patterns
-        const simplifiedCashFlows = [-totalInvestment];
-        const monthlyReturn = sumCashFlows / (contractDuration * 12);
-
-        // Create simplified monthly flows (same amount each month)
-        for (let i = 0; i < contractDuration * 12; i++) {
-          if (i === contractDuration * 12 - 1) {
-            // Add residual in last month
-            simplifiedCashFlows.push(monthlyReturn + totalResidualValue);
-          } else {
-            simplifiedCashFlows.push(monthlyReturn);
-          }
-        }
-
-        // Try IRR calculation with simplified flows
-        sanityIrr = calculateIRR(simplifiedCashFlows);
-      }
-    }
-
-    // Calculate IRR on monthly basis
-    const monthlyIrr = sanityIrr || calculateIRR(monthlyCashFlows);
-
-    // Convert monthly IRR to annual IRR (compound over 12 months)
+    // Calculate IRR on monthly cash flows and annualize
+    const monthlyIrr = calculateIRR(monthlyCashFlows);
     const annualIrr = monthlyIrr !== null && monthlyIrr > -1
       ? Math.pow(1 + monthlyIrr, 12) - 1
       : (monthlyIrr === -1 ? -1 : null);
@@ -356,7 +417,7 @@ export function GpuCalculator() {
       annualHostingCost: monthlyHostingCost * 12,
       totalAnnualCosts: totalMonthlyCosts * 12,
       annualProfit: totalOwnerRevenue / contractDuration - totalMonthlyCosts * 12,
-      annualROI: totalROI, // This is actually total ROI for the entire contract period
+      totalROI: totalROI, // Total ROI percentage for the entire contract period
       totalResidualValue,
       paybackYears,
       paybackMonth,
@@ -380,8 +441,7 @@ export function GpuCalculator() {
     : ownerRevenue * contractDuration;
 
   // Calculate ROI and Payback using financialMetrics which includes price decay
-  const profit = totalOwnerRevenue - initialCost;
-  const roi = initialCost > 0 ? (profit / initialCost) * 100 : 0;
+  const roi = financialMetrics.totalROI;
   const paybackMonths = financialMetrics.paybackMonth;
 
   // Check if secure mode is available for this GPU - This is now handled by checking specific rentalType rates
@@ -426,8 +486,8 @@ export function GpuCalculator() {
     <Card className="w-full bg-fgpu-stone-900 border-fgpu-stone-700">
       <div className="p-4">
       <h5 className="text-xl font-bold tracking-tight text-fgpu-white flex items-center gap-2">
-        <HiChip className="text-fgpu-volt" />
-        GPU Investment Calculator
+        <HiClipboard className="text-fgpu-volt" />
+        GPU Cloud Revenue Model
       </h5>
       <p className="font-normal text-fgpu-gray-300">
         Calculate the total cost of ownership, expected revenue, and return on investment
@@ -864,6 +924,19 @@ export function GpuCalculator() {
                   </div>
                 </button>
               </li>
+              <li className="mr-2" role="presentation">
+                <button
+                  className={`inline-block p-4 border-b-2 rounded-t-lg ${activeTab === "stats" ? "text-fgpu-volt border-fgpu-volt dark:text-fgpu-volt dark:border-fgpu-volt" : "hover:text-fgpu-stone-600 hover:border-fgpu-stone-300 dark:hover:text-fgpu-gray-300"}`}
+                  onClick={() => setActiveTab("stats")}
+                  type="button"
+                  role="tab"
+                >
+                  <div className="flex items-center">
+                    <HiServer className="mr-2" />
+                    GPU Stats
+                  </div>
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -871,14 +944,15 @@ export function GpuCalculator() {
             {activeTab === "overview" && (
               <FinancialMetrics
                 initialCost={initialCost}
-                  totalCost={initialCost}
+                totalCost={initialCost}
                 totalRevenue={totalOwnerRevenue}
                 roi={roi}
                 paybackMonths={paybackMonths}
                 contractDuration={contractDuration}
-                  irr={financialMetrics.irr}
-                  yearlyRevenue={financialMetrics.yearlyRevenue}
-                  monthlyRevenue={financialMetrics.monthlyRevenue}
+                irr={financialMetrics.irr}
+                yearlyRevenue={financialMetrics.yearlyRevenue}
+                monthlyRevenue={financialMetrics.monthlyRevenue}
+                residualValue={financialMetrics.totalResidualValue}
               />
             )}
 
@@ -890,6 +964,10 @@ export function GpuCalculator() {
                 idlePercentage={idlePercentage}
                 contractDuration={contractDuration}
               />
+            )}
+
+            {activeTab === "stats" && (
+              <GpuStats gpu={gpu} rentalType={rentalType} />
             )}
           </div>
         </div>

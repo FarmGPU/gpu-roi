@@ -1,17 +1,18 @@
 "use client"
 
 import { useState } from "react"
-import { Card, Label, Tooltip } from "flowbite-react"
+import { Card, Label } from "flowbite-react"
 import { Input } from "@/components/ui/input"
 import {
   HiOutlineCurrencyDollar,
   HiOutlineLightningBolt,
   HiOutlineCloud,
   HiOutlineOfficeBuilding,
-  HiInformationCircle,
   HiOutlineClock,
   HiOutlineCalendar,
 } from "react-icons/hi"
+import { HiInformationCircle } from "react-icons/hi"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface TCOBreakdownProps {
   initialCost: number
@@ -60,8 +61,29 @@ export function TCOBreakdown({
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Label htmlFor="power-cost" className="text-fgpu-gray-300">Power Cost ($/kWh)</Label>
-                <Tooltip content="Cost of electricity per kilowatt-hour">
-                  <HiInformationCircle className="text-fgpu-gray-400" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="text-fgpu-gray-400 hover:text-fgpu-volt transition-colors"
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <HiInformationCircle className="h-5 w-5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="flex items-center justify-between gap-2">
+                      <p>Cost per kilowatt-hour of electricity</p>
+                      <button
+                        className="text-fgpu-gray-400 hover:text-fgpu-volt"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </TooltipContent>
                 </Tooltip>
               </div>
               <Input
@@ -78,8 +100,29 @@ export function TCOBreakdown({
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Label htmlFor="rackspace-cost" className="text-fgpu-gray-300">Rackspace Cost ($/month/rack)</Label>
-                <Tooltip content="Monthly cost for rack space in the data center">
-                  <HiInformationCircle className="text-fgpu-gray-400" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="text-fgpu-gray-400 hover:text-fgpu-volt transition-colors"
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <HiInformationCircle className="h-5 w-5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="flex items-center justify-between gap-2">
+                      <p>Monthly cost for rack space in the data center</p>
+                      <button
+                        className="text-fgpu-gray-400 hover:text-fgpu-volt"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </TooltipContent>
                 </Tooltip>
               </div>
               <Input
@@ -95,8 +138,29 @@ export function TCOBreakdown({
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Label htmlFor="network-cost" className="text-fgpu-gray-300">Network Cost ($/month/rack)</Label>
-                <Tooltip content="Monthly cost for network bandwidth per rack">
-                  <HiInformationCircle className="text-fgpu-gray-400" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="text-fgpu-gray-400 hover:text-fgpu-volt transition-colors"
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <HiInformationCircle className="h-5 w-5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="flex items-center justify-between gap-2">
+                      <p>Monthly cost for network bandwidth per rack</p>
+                      <button
+                        className="text-fgpu-gray-400 hover:text-fgpu-volt"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </TooltipContent>
                 </Tooltip>
               </div>
               <Input
@@ -112,8 +176,29 @@ export function TCOBreakdown({
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Label htmlFor="gpus-per-rack" className="text-fgpu-gray-300">GPUs per Rack</Label>
-                <Tooltip content="Number of GPUs that can be installed in a single rack">
-                  <HiInformationCircle className="text-fgpu-gray-400" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="text-fgpu-gray-400 hover:text-fgpu-volt transition-colors"
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <HiInformationCircle className="h-5 w-5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="flex items-center justify-between gap-2">
+                      <p>Number of GPUs that can be installed in a single rack</p>
+                      <button
+                        className="text-fgpu-gray-400 hover:text-fgpu-volt"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </TooltipContent>
                 </Tooltip>
               </div>
               <Input

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { GpuCalculator } from "@/components/gpu-calculator"
 import { HiChip, HiCalculator } from "react-icons/hi"
+import { TooltipProvider } from "@/components/ui/tooltip"
 
 export default function Home() {
   const [mounted, setMounted] = useState(false)
@@ -44,7 +45,9 @@ export default function Home() {
 
       <main className="container mx-auto px-8 py-8">
         <section id="calculator" className="mb-12">
-          <GpuCalculator />
+          <TooltipProvider>
+            <GpuCalculator />
+          </TooltipProvider>
         </section>
       </main>
     </div>
