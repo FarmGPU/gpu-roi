@@ -1,26 +1,88 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Card, Select, Button, Label, Tooltip, Badge } from "flowbite-react"
-import { gpuData } from "@/data/gpu-data"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { gpuData, GPU } from "@/data/gpu-data"
+import { Slider } from "@/components/ui/slider"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
+import { HiOutlineQuestionMarkCircle, HiOutlineTrendingUp, HiOutlineCurrencyDollar, HiOutlineClock, HiOutlineFire, HiOutlineAdjustments, HiServer, HiLightningBolt, HiCash } from "react-icons/hi"
 import { FinancialMetrics } from "@/components/financial-metrics"
 import { TCOBreakdown } from "@/components/tco-breakdown"
 import {
   HiChip,
   HiClock,
   HiCurrencyDollar,
-  HiLightningBolt,
   HiRefresh,
   HiInformationCircle,
-  HiServer,
   HiShieldCheck,
-  HiCash,
 } from "react-icons/hi"
-import { Slider } from "@/components/ui/slider"
+
+// Helper function to calculate IRR using an iterative approach (Newton-Raphson)
+const calculateIRR = (cashFlows: number[], guess = 0.1, maxIterations = 100, tolerance = 1e-6): number | null => {
+  let rate = guess;
+
+  for (let i = 0; i < maxIterations; i++) {
+    let npv = 0;
+    let dNpv = 0; // Derivative of NPV with respect to rate
+
+    cashFlows.forEach((cf, t) => {
+      npv += cf / Math.pow(1 + rate, t);
+      if (t > 0) {
+        dNpv -= (t * cf) / Math.pow(1 + rate, t + 1);
+      }
+    });
+
+    if (Math.abs(npv) < tolerance) {
+      return rate; // Found a satisfactory rate
+    }
+
+    if (dNpv === 0) {
+        // Avoid division by zero if the derivative is zero
+        // This might happen with certain cash flow patterns or if the guess is far off
+        // Try a slightly different guess or return null if it persists
+        rate += (npv > 0 ? 0.01 : -0.01); // Perturb the rate slightly
+        if (i > 5) return null; // Give up after a few attempts
+        continue;
+    }
+
+
+    const newRate = rate - npv / dNpv;
+
+     if (isNaN(newRate) || !isFinite(newRate)) {
+      // Handle cases where the calculation results in NaN or Infinity
+      return null;
+    }
+
+
+    // Basic check to prevent wild jumps, though Newton-Raphson can be sensitive
+    if (Math.abs(newRate - rate) < tolerance * Math.abs(newRate)) {
+         // If the change is very small relative to the rate, consider it converged
+         // This helps prevent issues if NPV itself is large but the derivative is also large
+         if (Math.abs(npv) < tolerance * 10) { // Check if NPV is also reasonably small
+            return newRate;
+         }
+         // If NPV is still large despite small rate change, might be stuck or no solution near guess
+        // return null; // Or try a different perturbation strategy
+    }
+
+
+    rate = newRate;
+  }
+
+  return null; // Failed to converge
+};
 
 export function GpuCalculator() {
   const [selectedGpu, setSelectedGpu] = useState(gpuData[0].id)
-  const [contractDuration, setContractDuration] = useState(5)
+  const [contractDuration, setContractDuration] = useState(3)
   const [idlePercentage, setIdlePercentage] = useState(5)
   const [spotPercentage, setSpotPercentage] = useState(10)
   const [onDemandPercentage, setOnDemandPercentage] = useState(85)
@@ -31,36 +93,49 @@ export function GpuCalculator() {
     return gpu.cardType === "Consumer" ? 50 : 70
   })
   const [activeTab, setActiveTab] = useState("overview")
+  const [utilization, setUtilization] = useState(100)
+  const [hostingCost, setHostingCost] = useState(0.1) // $/hr
+  const [rentalRateMultiplier, setRentalRateMultiplier] = useState(1)
+  const [advancedMode, setAdvancedMode] = useState(false) // State for advanced mode
+  const [residualValues, setResidualValues] = useState({ // State for residual values
+    year1: 0.60,
+    year2: 0.40,
+    year3: 0.25,
+  })
+  const [rentalType, setRentalType] = useState<"community" | "secure">("secure");
+  const [utilizationPercentages, setUtilizationPercentages] = useState({ idle: 10, spot: 30, onDemand: 60 });
+  const [revenueSplit, setRevenueSplit] = useState({ platform: 10, owner: 80, provider: 10 });
+  const [powerCost, setPowerCost] = useState(0.15); // $/kWh
 
-  const gpu = gpuData.find((g) => g.id === selectedGpu) || gpuData[0]
+  const gpu = useMemo(() => gpuData.find((g) => g.id === selectedGpu) || gpuData[0], [selectedGpu]);
 
   // Update owner share when GPU changes
   useEffect(() => {
     setOwnerSharePercentage(gpu.cardType === "Consumer" ? 50 : 70)
-  }, [selectedGpu])
+  }, [gpu])
 
   // Calculate weighted hourly rate based on percentages
   const calculateHourlyRate = useMemo(() => {
     // Ensure percentages add up to 100%
-    const totalPercentage = idlePercentage + spotPercentage + onDemandPercentage
-    const normalizedIdle = idlePercentage / totalPercentage
-    const normalizedSpot = spotPercentage / totalPercentage
-    const normalizedOnDemand = onDemandPercentage / totalPercentage
+    const totalPercentage = utilizationPercentages.idle + utilizationPercentages.spot + utilizationPercentages.onDemand;
+    const normalizedIdle = utilizationPercentages.idle / totalPercentage;
+    const normalizedSpot = utilizationPercentages.spot / totalPercentage;
+    const normalizedOnDemand = utilizationPercentages.onDemand / totalPercentage;
 
-    // Get the appropriate rates based on secure mode
-    const spotRate = secureMode ? gpu.secureSpot : gpu.communitySpot
-    const onDemandRate = secureMode ? gpu.secureOnDemand : gpu.communityOnDemand
+    // Get the appropriate rates based on rental type
+    const spotRate = rentalType === 'community' ? gpu.communitySpot : gpu.secureSpot;
+    const onDemandRate = rentalType === 'community' ? gpu.communityOnDemand : gpu.secureOnDemand;
 
     // If rates are not available for the selected mode, use the available ones or default to 0
-    const effectiveSpotRate = spotRate ?? (secureMode ? gpu.communitySpot : 0) ?? 0
-    const effectiveOnDemandRate = onDemandRate ?? (secureMode ? gpu.communityOnDemand : 0) ?? 0
+    const effectiveSpotRate = spotRate ?? (rentalType === 'community' ? gpu.communitySpot : 0) ?? 0
+    const effectiveOnDemandRate = onDemandRate ?? (rentalType === 'community' ? gpu.communityOnDemand : 0) ?? 0
 
     // Calculate weighted average (idle is always $0/hr)
     const weightedRate =
       normalizedIdle * 0 + normalizedSpot * effectiveSpotRate + normalizedOnDemand * effectiveOnDemandRate
 
     return weightedRate
-  }, [gpu, idlePercentage, spotPercentage, onDemandPercentage, secureMode])
+  }, [gpu, utilizationPercentages, rentalType])
 
   // Calculate Revenue
   const hourlyRate = calculateHourlyRate
@@ -79,11 +154,126 @@ export function GpuCalculator() {
 
   // Calculate ROI and Payback
   const profit = totalOwnerRevenue - initialCost // Only consider initial cost when provider pays OPEX
-  const roi = (profit / initialCost) * 100
-  const paybackMonths = initialCost / (ownerRevenue / 12)
+  const roi = initialCost > 0 ? (profit / initialCost) * 100 : 0; // Handle initialCost = 0
+  const paybackMonths = ownerRevenue > 0 ? initialCost / (ownerRevenue / 12) : Infinity; // Handle ownerRevenue = 0
 
-  // Check if secure mode is available for this GPU
-  const secureAvailable = gpu.secureSpot !== null || gpu.secureOnDemand !== null
+
+  // Check if secure mode is available for this GPU - This is now handled by checking specific rentalType rates
+  // const secureAvailable = gpu.secureSpot !== null || gpu.secureOnDemand !== null
+
+  const handleResidualValueChange = (year: keyof typeof residualValues, value: string) => {
+    const numericValue = parseFloat(value)
+    if (!isNaN(numericValue) && numericValue >= 0 && numericValue <= 1) {
+      setResidualValues(prev => ({ ...prev, [year]: numericValue }))
+    }
+  }
+
+  // Memoize calculations for FinancialMetrics - Renamed and adjusted
+  const financialMetrics = useMemo(() => {
+    const hoursPerYear = 8760;
+
+    // Determine active rental rates based on selected type
+    const spotRate = rentalType === 'community' ? gpu.communitySpot : gpu.secureSpot;
+    const onDemandRate = rentalType === 'community' ? gpu.communityOnDemand : gpu.secureOnDemand;
+
+    // Weighted average rental rate based on utilization distribution
+    const averageRentalRate =
+      ((spotRate ?? 0) * utilizationPercentages.spot / 100 +
+       (onDemandRate ?? 0) * utilizationPercentages.onDemand / 100);
+
+    // Ensure averageRentalRate is not NaN if rates are null
+     const validAverageRentalRate = isNaN(averageRentalRate) ? 0 : averageRentalRate;
+
+
+    // Calculate Annual Revenue (considering owner's share)
+    const grossAnnualRevenue = validAverageRentalRate * hoursPerYear;
+    const ownerAnnualRevenue = grossAnnualRevenue * (revenueSplit.owner / 100);
+
+
+    // Calculate Annual Power Consumption Cost
+    const avgPowerConsumptionWatts =
+      (gpu.idlePowerConsumption * utilizationPercentages.idle / 100) +
+      (gpu.powerConsumption * (utilizationPercentages.spot + utilizationPercentages.onDemand) / 100);
+    const annualKWh = (avgPowerConsumptionWatts * hoursPerYear) / 1000;
+    const annualPowerCost = annualKWh * powerCost; // Use powerCost state
+
+    // Calculate Annual Hosting Cost
+    const annualHostingCost = hostingCost * hoursPerYear;
+
+    // Calculate Total Annual Costs
+    const totalAnnualCosts = annualPowerCost + annualHostingCost;
+
+    // Calculate Annual Profit
+    const annualProfit = ownerAnnualRevenue - totalAnnualCosts;
+
+    // Calculate Simple Annual ROI
+    const annualROI = gpu.price > 0 ? (annualProfit / gpu.price) : 0;
+
+    // --- IRR Calculation ---
+    const cashFlows: number[] = [];
+    cashFlows.push(-gpu.price); // Year 0: Initial Investment
+
+    // Add annual profit for each year up to contract duration
+    for (let i = 1; i <= contractDuration; i++) {
+        if (i === contractDuration) {
+             // Add residual value in the last year
+            cashFlows.push(annualProfit + gpu.price * (residualValues as any)[`year${Math.min(i, 3)}`]);
+        } else {
+            cashFlows.push(annualProfit);
+        }
+    }
+
+    const irr = calculateIRR(cashFlows);
+
+    // Calculate Payback Period (Simple)
+    const paybackYears = annualProfit > 0 ? gpu.price / annualProfit : Infinity;
+
+    return {
+      ownerAnnualRevenue,
+      annualPowerCost,
+      annualHostingCost,
+      totalAnnualCosts,
+      annualProfit,
+      annualROI,
+      paybackYears,
+      irr, // Add IRR to returned metrics
+    };
+  }, [gpu, rentalType, utilizationPercentages, revenueSplit, hostingCost, powerCost, residualValues, contractDuration]);
+
+  // Handler for GPU select (corrected type)
+  const handleGpuChange = (value: string) => {
+    setSelectedGpu(value);
+  };
+
+  // Handler for contract duration select (corrected type)
+  const handleContractDurationChange = (value: string) => {
+    setContractDuration(Number.parseInt(value));
+  };
+
+  // Handler for rental type select (Type the value parameter explicitly)
+  const handleRentalTypeChange = (value: string) => {
+    // Use type assertion after check
+    if (["community", "secure"].includes(value)) {
+        setRentalType(value as typeof rentalType);
+    }
+  };
+
+  // Define handlers for sliders (example for one set, repeat for others if needed)
+  const handleUtilizationChange = (values: number[]) => {
+      // Example logic: assumes slider controls [idle, spot] percentages, calculate onDemand
+      const idle = values[0] ?? 0;
+      const spot = (values[1] ?? 0) - idle;
+      const onDemand = Math.max(0, 100 - idle - spot);
+      setUtilizationPercentages({ idle, spot, onDemand });
+  };
+
+    const handleRevenueSplitChange = (values: number[]) => {
+      const platform = values[0] ?? 0;
+      const owner = (values[1] ?? 0) - platform;
+      const provider = Math.max(0, 100 - platform - owner);
+      setRevenueSplit({ platform, owner, provider });
+  };
+
 
   return (
     <Card className="w-full bg-fgpu-stone-900 border-fgpu-stone-700">
@@ -100,7 +290,7 @@ export function GpuCalculator() {
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <HiChip className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
-              <Label htmlFor="gpu-model" value="GPU Model" className="text-fgpu-stone-600 dark:text-fgpu-gray-300" />
+              <Label htmlFor="gpu-select" className="text-fgpu-stone-600 dark:text-fgpu-gray-300">GPU Model</Label>
               <Badge
                 color={gpu.cardType === "Data Center" ? "blue" : gpu.cardType === "Workstation" ? "purple" : "gray"}
                 className="ml-auto"
@@ -108,43 +298,36 @@ export function GpuCalculator() {
                 {gpu.cardType}
               </Badge>
             </div>
-            <Select
-              id="gpu"
-              value={selectedGpu}
-              onChange={(e) => setSelectedGpu(e.target.value)}
-              className="bg-fgpu-stone-900 text-fgpu-gray-300 border-fgpu-stone-700"
-            >
-              <option value="" disabled>Select a GPU</option>
-              {/* Data Center GPUs */}
-              <optgroup label="Data Center GPUs" className="bg-fgpu-stone-900 text-fgpu-gray-300">
+            <Select onValueChange={handleGpuChange} defaultValue={selectedGpu}>
+              <SelectTrigger id="gpu-select">
+                  <SelectValue placeholder="Select a GPU" />
+              </SelectTrigger>
+              <SelectContent>
+                <Label className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">Data Center GPUs</Label>
                 {gpuData
                   .filter((gpu) => gpu.cardType === "Data Center")
                   .map((gpu) => (
-                    <option key={gpu.id} value={gpu.id} className="bg-fgpu-stone-900">
-                      {gpu.name}
-                    </option>
+                    <SelectItem key={gpu.id} value={gpu.id}>
+                      {gpu.name} (${gpu.price.toLocaleString()})
+                    </SelectItem>
                   ))}
-              </optgroup>
-              {/* Consumer GPUs */}
-              <optgroup label="Consumer GPUs" className="bg-fgpu-stone-900 text-fgpu-gray-300">
+                <Label className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">Consumer GPUs</Label>
                 {gpuData
                   .filter((gpu) => gpu.cardType === "Consumer")
                   .map((gpu) => (
-                    <option key={gpu.id} value={gpu.id} className="bg-fgpu-stone-900">
-                      {gpu.name}
-                    </option>
+                    <SelectItem key={gpu.id} value={gpu.id}>
+                      {gpu.name} (${gpu.price.toLocaleString()})
+                    </SelectItem>
                   ))}
-              </optgroup>
-              {/* Workstation GPUs */}
-              <optgroup label="Workstation GPUs" className="bg-fgpu-stone-900 text-fgpu-gray-300">
+                <Label className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">Workstation GPUs</Label>
                 {gpuData
                   .filter((gpu) => gpu.cardType === "Workstation")
                   .map((gpu) => (
-                    <option key={gpu.id} value={gpu.id} className="bg-fgpu-stone-900">
-                      {gpu.name}
-                    </option>
+                    <SelectItem key={gpu.id} value={gpu.id}>
+                      {gpu.name} (${gpu.price.toLocaleString()})
+                    </SelectItem>
                   ))}
-              </optgroup>
+              </SelectContent>
             </Select>
           </div>
 
@@ -153,20 +336,17 @@ export function GpuCalculator() {
               <HiClock className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
               <Label
                 htmlFor="contract-duration"
-                value="Contract Duration (Years)"
                 className="text-fgpu-stone-600 dark:text-fgpu-gray-300"
-              />
+              >Contract Duration (Years)</Label>
             </div>
-            <Select
-              id="contract-duration"
-              value={contractDuration}
-              onChange={(e) => setContractDuration(Number.parseInt(e.target.value))}
-              className="bg-fgpu-stone-900 text-fgpu-gray-300 border-fgpu-stone-700"
-            >
-              <option value="1">1 Year</option>
-              <option value="2">2 Years</option>
-              <option value="3">3 Years</option>
-              <option value="5">5 Years</option>
+            <Select onValueChange={handleContractDurationChange} defaultValue={contractDuration.toString()}>
+              <SelectTrigger id="contract-duration">
+                <SelectValue placeholder="Select Duration" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="2">2 Years</SelectItem>
+                <SelectItem value="3">3 Years</SelectItem>
+              </SelectContent>
             </Select>
           </div>
 
@@ -175,50 +355,41 @@ export function GpuCalculator() {
               <div className="flex items-center gap-2">
                 <HiServer className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
                 <Label
-                  htmlFor="secure-mode"
-                  value="Hosting Mode"
+                  htmlFor="rental-type-select"
                   className="text-fgpu-stone-600 dark:text-fgpu-gray-300"
-                />
+                >Rental Type</Label>
               </div>
               <div className="flex items-center gap-2">
-                <Label
-                  htmlFor="secure-mode-toggle"
-                  value={secureMode ? "Secure" : "Community"}
-                  className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400"
-                />
-                <button
-                  id="secure-mode-toggle"
-                  onClick={() => {
-                    if (secureAvailable || !secureMode) {
-                      setSecureMode(!secureMode)
-                    }
-                  }}
-                  disabled={!secureAvailable && secureMode}
-                  className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-fgpu-volt/30 ${
-                    secureMode ? "bg-fgpu-volt" : "bg-fgpu-stone-200 dark:bg-fgpu-stone-700"
-                  } ${!secureAvailable && secureMode ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                <Select
+                  onValueChange={handleRentalTypeChange}
+                  defaultValue={rentalType}
                 >
-                  <span
-                    className={`inline-block w-5 h-5 transform bg-white rounded-full transition-transform ${
-                      secureMode ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                  {secureMode && <HiShieldCheck className="absolute right-1 text-white text-xs" />}
-                </button>
+                  <SelectTrigger id="rental-type-select">
+                    <SelectValue placeholder="Select Rental Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="community">Community</SelectItem>
+                    <SelectItem value="secure">Secure</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            {!secureAvailable && secureMode && (
-              <p className="text-xs text-red-500">Secure mode not available for this GPU. Using Community rates.</p>
-            )}
           </div>
 
           <div className="space-y-4 p-4 bg-fgpu-stone-600 rounded-lg">
             <h3 className="text-sm font-medium text-fgpu-gray-300 flex items-center gap-2">
               <HiLightningBolt className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
               Usage Distribution
-              <Tooltip content="Set the percentage of time your GPU will be idle, running spot jobs, or on-demand jobs">
-                <HiInformationCircle className="text-gray-400" />
-              </Tooltip>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HiInformationCircle className="text-gray-400" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Set the percentage of time your GPU will be idle, running spot jobs, or on-demand jobs</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </h3>
 
             <div className="space-y-3">
@@ -243,10 +414,24 @@ export function GpuCalculator() {
                       const newSpot = Math.round(remaining * spotRatio)
                       setSpotPercentage(newSpot)
                       setOnDemandPercentage(remaining - newSpot)
+                      // Update utilizationPercentages too
+                      setUtilizationPercentages({
+                        idle: newValue,
+                        spot: newSpot,
+                        onDemand: remaining - newSpot
+                      })
                     } else {
                       // If both are 0, split remaining evenly
-                      setSpotPercentage(Math.round(remaining / 2))
-                      setOnDemandPercentage(Math.round(remaining / 2))
+                      const newSpot = Math.round(remaining / 2)
+                      const newOnDemand = Math.round(remaining / 2)
+                      setSpotPercentage(newSpot)
+                      setOnDemandPercentage(newOnDemand)
+                      // Update utilizationPercentages too
+                      setUtilizationPercentages({
+                        idle: newValue,
+                        spot: newSpot,
+                        onDemand: newOnDemand
+                      })
                     }
                   }}
                   className="w-full"
@@ -267,6 +452,12 @@ export function GpuCalculator() {
                     const newValue = values[0]
                     setSpotPercentage(newValue)
                     setOnDemandPercentage(100 - idlePercentage - newValue)
+                    // Update utilizationPercentages too
+                    setUtilizationPercentages({
+                      idle: idlePercentage,
+                      spot: newValue,
+                      onDemand: 100 - idlePercentage - newValue
+                    })
                   }}
                   className="w-full"
                 />
@@ -286,6 +477,12 @@ export function GpuCalculator() {
                     const newValue = values[0]
                     setOnDemandPercentage(newValue)
                     setSpotPercentage(100 - idlePercentage - newValue)
+                    // Update utilizationPercentages too
+                    setUtilizationPercentages({
+                      idle: idlePercentage,
+                      spot: 100 - idlePercentage - newValue,
+                      onDemand: newValue
+                    })
                   }}
                   className="w-full"
                 />
@@ -306,9 +503,16 @@ export function GpuCalculator() {
             <h3 className="text-sm font-medium text-fgpu-gray-300 flex items-center gap-2">
               <HiCurrencyDollar className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
               Revenue Sharing
-              <Tooltip content="Set how revenue is split between the platform, owner (investor), and provider (data center)">
-                <HiInformationCircle className="text-gray-400" />
-              </Tooltip>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HiInformationCircle className="text-gray-400" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Set how revenue is split between the platform, owner (investor), and provider (data center)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </h3>
 
             <div className="space-y-3">
@@ -371,6 +575,48 @@ export function GpuCalculator() {
               </div>
             </div>
           </div>
+
+          {/* Advanced Mode Toggle */}
+          <div className="flex items-center space-x-2 mt-4">
+            <Switch
+              id="advanced-mode"
+              checked={advancedMode}
+              onCheckedChange={setAdvancedMode}
+            />
+            <Label htmlFor="advanced-mode">Advanced Mode</Label>
+          </div>
+
+          {/* Residual Value Input (Conditional) */}
+          {advancedMode && (
+              <div className="grid gap-4 mt-4 p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                  <h4 className="text-md font-medium mb-2 text-gray-600 dark:text-gray-400">Residual Value (% of Original Price)</h4>
+                  <div className="space-y-3">
+                      <div className="flex justify-between mb-1">
+                          <Label htmlFor="residual-slider" className="text-sm text-gray-600 dark:text-gray-400">
+                            Year {contractDuration} Residual
+                          </Label>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            {Math.round(residualValues[`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues] * 100)}%
+                          </span>
+                      </div>
+                      <Slider
+                          id="residual-slider"
+                          value={[residualValues[`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues] * 100]}
+                          min={0}
+                          max={100}
+                          step={1}
+                          onValueChange={(values) => {
+                              const newValue = (values[0] / 100).toString();
+                              handleResidualValueChange(`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues, newValue);
+                          }}
+                          className="w-full"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Estimated resale value after {contractDuration} years
+                      </p>
+                  </div>
+              </div>
+          )}
         </div>
 
         <div className="md:col-span-2">
@@ -409,11 +655,12 @@ export function GpuCalculator() {
             {activeTab === "overview" && (
               <FinancialMetrics
                 initialCost={initialCost}
-                totalCost={initialCost} // Only initial cost when provider pays OPEX
+                totalCost={initialCost}
                 totalRevenue={totalOwnerRevenue}
                 roi={roi}
                 paybackMonths={paybackMonths}
                 contractDuration={contractDuration}
+                irr={financialMetrics.irr}
               />
             )}
 

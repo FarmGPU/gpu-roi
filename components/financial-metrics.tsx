@@ -13,6 +13,7 @@ interface FinancialMetricsProps {
   paybackMonths: number
   contractDuration: number
   providerPaysOpex?: boolean
+  irr: number | null
 }
 
 export function FinancialMetrics({
@@ -23,6 +24,7 @@ export function FinancialMetrics({
   paybackMonths,
   contractDuration,
   providerPaysOpex = false,
+  irr,
 }: FinancialMetricsProps) {
   const profit = totalRevenue - totalCost
   const isProfitable = profit > 0
@@ -30,7 +32,8 @@ export function FinancialMetrics({
 
   // Calculate annual revenue (assuming linear distribution)
   const annualRevenue = totalRevenue / contractDuration
-  const annualROI = ((annualRevenue - (totalCost / contractDuration)) / initialCost) * 100
+  const annualProfit = annualRevenue - (totalCost / contractDuration);
+  const annualROI = initialCost > 0 ? (annualProfit / initialCost) * 100 : 0;
 
   // Generate data for the cumulative revenue chart
   const monthlyRevenue = annualRevenue / 12
@@ -88,6 +91,29 @@ export function FinancialMetrics({
           <p className={`text-2xl font-bold ${annualROI >= 0 ? "text-fgpu-volt" : "text-fgpu-stone-500"}`}>
             {annualROI.toFixed(1)}%
           </p>
+
+          <div className="mt-4 pt-4 border-t border-fgpu-stone-700">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium flex items-center gap-2 text-fgpu-stone-600 dark:text-fgpu-gray-300">
+                <HiTrendingUp className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
+                IRR
+                <button data-tooltip-target="irr-tooltip">
+                  <HiInformationCircle className="text-gray-400 hover:text-gray-600" />
+                </button>
+                <div
+                  id="irr-tooltip"
+                  role="tooltip"
+                  className="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700"
+                >
+                  Internal Rate of Return based on initial investment and projected cash flows over the contract duration, including residual value.
+                  <div className="tooltip-arrow" data-popper-arrow></div>
+                </div>
+              </h3>
+            </div>
+            <p className={`text-2xl font-bold ${irr !== null && irr >= 0 ? "text-fgpu-volt" : "text-fgpu-stone-500"}`}>
+              {irr !== null ? `${(irr * 100).toFixed(2)}%` : 'Calculating...'}
+            </p>
+          </div>
         </Card>
 
         <Card className="bg-fgpu-stone-600 border-fgpu-stone-700">
