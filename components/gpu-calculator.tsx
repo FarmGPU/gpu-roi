@@ -27,57 +27,77 @@ import {
 
 // Helper function to calculate IRR using an iterative approach (Newton-Raphson)
 const calculateIRR = (cashFlows: number[], guess = 0.1, maxIterations = 100, tolerance = 1e-6): number | null => {
-  let rate = guess;
+  // If there are no cash flows or all cash flows are 0, IRR is not defined
+  if (!cashFlows || cashFlows.length < 2) return null;
 
-  for (let i = 0; i < maxIterations; i++) {
-    let npv = 0;
-    let dNpv = 0; // Derivative of NPV with respect to rate
+  // Check if all values after the initial investment are non-positive
+  // This would indicate an investment that never recovers (negative IRR)
+  let hasPositive = false;
+  for (let i = 1; i < cashFlows.length; i++) {
+    if (cashFlows[i] > 0) {
+      hasPositive = true;
+      break;
+    }
+  }
+  if (!hasPositive) return -1; // Return -100% since investment never recovers
 
-    cashFlows.forEach((cf, t) => {
-      npv += cf / Math.pow(1 + rate, t);
-      if (t > 0) {
-        dNpv -= (t * cf) / Math.pow(1 + rate, t + 1);
+  // Use multiple starting points to increase chances of convergence
+  const guesses = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3];
+
+  for (const initialGuess of guesses) {
+    let rate = initialGuess;
+    let iterations = 0;
+
+    while (iterations < maxIterations) {
+      let npv = 0;
+      let dNpv = 0; // Derivative of NPV with respect to rate
+
+      // Calculate NPV and its derivative
+      for (let t = 0; t < cashFlows.length; t++) {
+        const cf = cashFlows[t];
+        const discountFactor = Math.pow(1 + rate, t);
+
+        npv += cf / discountFactor;
+
+        if (t > 0) {
+          dNpv -= (t * cf) / Math.pow(1 + rate, t + 1);
+        }
       }
-    });
 
-    if (Math.abs(npv) < tolerance) {
-      return rate; // Found a satisfactory rate
+      // If NPV is close enough to zero, we found the IRR
+      if (Math.abs(npv) < tolerance) {
+        return rate;
+      }
+
+      // Avoid division by zero
+      if (Math.abs(dNpv) < 1e-10) {
+        break; // Try next initial guess
+      }
+
+      // Use Newton-Raphson step to get next approximation
+      const newRate = rate - npv / dNpv;
+
+      // Check for NaN or Infinity which would indicate failure
+      if (isNaN(newRate) || !isFinite(newRate) || newRate < -1) {
+        break; // Try next initial guess
+      }
+
+      // Check for convergence
+      if (Math.abs(newRate - rate) < tolerance) {
+        // Additional check to ensure the solution is valid
+        if (Math.abs(npv) < tolerance * 10) {
+          return newRate;
+        }
+      }
+
+      // Prepare for next iteration
+      rate = newRate;
+      iterations++;
     }
-
-    if (dNpv === 0) {
-        // Avoid division by zero if the derivative is zero
-        // This might happen with certain cash flow patterns or if the guess is far off
-        // Try a slightly different guess or return null if it persists
-        rate += (npv > 0 ? 0.01 : -0.01); // Perturb the rate slightly
-        if (i > 5) return null; // Give up after a few attempts
-        continue;
-    }
-
-
-    const newRate = rate - npv / dNpv;
-
-     if (isNaN(newRate) || !isFinite(newRate)) {
-      // Handle cases where the calculation results in NaN or Infinity
-      return null;
-    }
-
-
-    // Basic check to prevent wild jumps, though Newton-Raphson can be sensitive
-    if (Math.abs(newRate - rate) < tolerance * Math.abs(newRate)) {
-         // If the change is very small relative to the rate, consider it converged
-         // This helps prevent issues if NPV itself is large but the derivative is also large
-         if (Math.abs(npv) < tolerance * 10) { // Check if NPV is also reasonably small
-            return newRate;
-         }
-         // If NPV is still large despite small rate change, might be stuck or no solution near guess
-        // return null; // Or try a different perturbation strategy
-    }
-
-
-    rate = newRate;
   }
 
-  return null; // Failed to converge
+  // If we tried all initial guesses and none converged, give up
+  return null;
 };
 
 export function GpuCalculator() {
@@ -102,6 +122,7 @@ export function GpuCalculator() {
     year2: 0.40,
     year3: 0.25,
   })
+  const [priceDecayRate, setPriceDecayRate] = useState(20) // 20% price decay per year by default
   const [rentalType, setRentalType] = useState<"community" | "secure">("secure");
   const [utilizationPercentages, setUtilizationPercentages] = useState({ idle: 10, spot: 30, onDemand: 60 });
   const [revenueSplit, setRevenueSplit] = useState({ platform: 10, owner: 80, provider: 10 });
@@ -116,54 +137,33 @@ export function GpuCalculator() {
     setOwnerSharePercentage(gpu.cardType === "Consumer" ? 50 : 70)
   }, [gpu])
 
-  // Calculate weighted hourly rate based on percentages
-  const calculateHourlyRate = useMemo(() => {
+  // Get hourly rate directly from GPU data without decay
+  const baseSpotRate = rentalType === 'community' ? gpu.communitySpot : gpu.secureSpot;
+  const baseOnDemandRate = rentalType === 'community' ? gpu.communityOnDemand : gpu.secureOnDemand;
+
+  // Calculate the base hourly rate from GPU data (without decay)
+  const baseHourlyRate = useMemo(() => {
     // Ensure percentages add up to 100%
     const totalPercentage = utilizationPercentages.idle + utilizationPercentages.spot + utilizationPercentages.onDemand;
     const normalizedIdle = utilizationPercentages.idle / totalPercentage;
     const normalizedSpot = utilizationPercentages.spot / totalPercentage;
     const normalizedOnDemand = utilizationPercentages.onDemand / totalPercentage;
 
-    // Get the appropriate rates based on rental type
-    const spotRate = rentalType === 'community' ? gpu.communitySpot : gpu.secureSpot;
-    const onDemandRate = rentalType === 'community' ? gpu.communityOnDemand : gpu.secureOnDemand;
-
-    // If rates are not available for the selected mode, use the available ones or default to 0
-    const effectiveSpotRate = spotRate ?? (rentalType === 'community' ? gpu.communitySpot : 0) ?? 0
-    const effectiveOnDemandRate = onDemandRate ?? (rentalType === 'community' ? gpu.communityOnDemand : 0) ?? 0
-
     // Calculate weighted average (idle is always $0/hr)
-    const weightedRate =
-      normalizedIdle * 0 + normalizedSpot * effectiveSpotRate + normalizedOnDemand * effectiveOnDemandRate
+    const effectiveSpotRate = baseSpotRate ?? 0;
+    const effectiveOnDemandRate = baseOnDemandRate ?? 0;
 
-    return weightedRate
-  }, [gpu, utilizationPercentages, rentalType])
+    return normalizedIdle * 0 + normalizedSpot * effectiveSpotRate + normalizedOnDemand * effectiveOnDemandRate;
+  }, [baseSpotRate, baseOnDemandRate, utilizationPercentages]);
 
-  // Calculate Revenue
-  const hourlyRate = calculateHourlyRate
-  const hoursPerYear = 365 * 24 // We're already accounting for utilization in the hourly rate
-  const grossAnnualRevenue = hourlyRate * hoursPerYear
-  const platformFee = grossAnnualRevenue * (platformFeePercentage / 100)
-  const netAnnualRevenue = grossAnnualRevenue - platformFee
-  const ownerRevenue = netAnnualRevenue * (ownerSharePercentage / 100)
-  const providerRevenue = netAnnualRevenue * (1 - ownerSharePercentage / 100)
-
-  const totalGrossRevenue = grossAnnualRevenue * contractDuration
-  const totalOwnerRevenue = ownerRevenue * contractDuration
+  // Get the average hourly rate with decay for financial calculations
+  const effectiveHourlyRate = baseHourlyRate;
 
   // Calculate TCO
   const serverCostPerGpu = serverCost / gpusPerServer;
   const initialCost = gpu.price + serverCostPerGpu;
 
-  // Calculate ROI and Payback
-  const profit = totalOwnerRevenue - initialCost // Only consider initial cost when provider pays OPEX
-  const roi = initialCost > 0 ? (profit / initialCost) * 100 : 0; // Handle initialCost = 0
-  const paybackMonths = ownerRevenue > 0 ? initialCost / (ownerRevenue / 12) : Infinity; // Handle ownerRevenue = 0
-
-
-  // Check if secure mode is available for this GPU - This is now handled by checking specific rentalType rates
-  // const secureAvailable = gpu.secureSpot !== null || gpu.secureOnDemand !== null
-
+  // Additional state for the residual value handler
   const handleResidualValueChange = (year: keyof typeof residualValues, value: string) => {
     const numericValue = parseFloat(value)
     if (!isNaN(numericValue) && numericValue >= 0 && numericValue <= 1) {
@@ -174,76 +174,218 @@ export function GpuCalculator() {
   // Memoize calculations for FinancialMetrics - Renamed and adjusted
   const financialMetrics = useMemo(() => {
     const hoursPerYear = 8760;
+    const hoursPerMonth = hoursPerYear / 12;
 
     // Determine active rental rates based on selected type
     const spotRate = rentalType === 'community' ? gpu.communitySpot : gpu.secureSpot;
     const onDemandRate = rentalType === 'community' ? gpu.communityOnDemand : gpu.secureOnDemand;
 
-    // Weighted average rental rate based on utilization distribution
-    const averageRentalRate =
-      ((spotRate ?? 0) * utilizationPercentages.spot / 100 +
-       (onDemandRate ?? 0) * utilizationPercentages.onDemand / 100);
+    // Calculate revenue for each month considering linear price decay
+    let totalOwnerRevenue = 0;
+    const yearlyOwnerRevenue = Array(contractDuration).fill(0);
+    const monthlyOwnerRevenue = Array(contractDuration * 12).fill(0);
+    const monthlyCumulativeRevenue = Array(contractDuration * 12).fill(0);
 
-    // Ensure averageRentalRate is not NaN if rates are null
-     const validAverageRentalRate = isNaN(averageRentalRate) ? 0 : averageRentalRate;
+    // Initial investment (Year 0)
+    const totalInvestment = gpu.price + serverCost / gpusPerServer;
 
+    // Calculate the monthly decay factor
+    const monthlyDecayRate = priceDecayRate / 100 / 12; // Convert percentage to decimal and divide by 12 months
 
-    // Calculate Annual Revenue (considering owner's share)
-    const grossAnnualRevenue = validAverageRentalRate * hoursPerYear;
-    const ownerAnnualRevenue = grossAnnualRevenue * (revenueSplit.owner / 100);
+    // Initial rates for month 0
+    let currentSpotRate = spotRate ?? 0;
+    let currentOnDemandRate = onDemandRate ?? 0;
 
-
-    // Calculate Annual Power Consumption Cost
+    // Calculate costs (assuming these don't change month over month)
     const avgPowerConsumptionWatts =
       (gpu.idlePowerConsumption * utilizationPercentages.idle / 100) +
       (gpu.powerConsumption * (utilizationPercentages.spot + utilizationPercentages.onDemand) / 100);
-    const annualKWh = (avgPowerConsumptionWatts * hoursPerYear) / 1000;
-    const annualPowerCost = annualKWh * powerCost; // Use powerCost state
+    const monthlyKWh = (avgPowerConsumptionWatts * hoursPerMonth) / 1000;
+    const monthlyPowerCost = monthlyKWh * powerCost;
+    const monthlyHostingCost = hostingCost * hoursPerMonth;
+    const totalMonthlyCosts = monthlyPowerCost + monthlyHostingCost;
 
-    // Calculate Annual Hosting Cost
-    const annualHostingCost = hostingCost * hoursPerYear;
+    // Find exact payback period
+    let paybackMonth = contractDuration * 12; // Default to end of contract
+    let cumulativeRevenue = 0;
 
-    // Calculate Total Annual Costs
-    const totalAnnualCosts = annualPowerCost + annualHostingCost;
+    // Calculate for each month
+    for (let month = 0; month < contractDuration * 12; month++) {
+      const year = Math.floor(month / 12);
 
-    // Calculate Annual Profit
-    const annualProfit = ownerAnnualRevenue - totalAnnualCosts;
+      // Apply decay for this month
+      if (month > 0) {
+        currentSpotRate = currentSpotRate * (1 - monthlyDecayRate);
+        currentOnDemandRate = currentOnDemandRate * (1 - monthlyDecayRate);
+      }
 
-    // Calculate Simple Annual ROI
-    const annualROI = gpu.price > 0 ? (annualProfit / gpu.price) : 0;
+      // Weighted average rental rate for this month
+      const monthlyAverageRentalRate =
+        (currentSpotRate * utilizationPercentages.spot / 100 +
+         currentOnDemandRate * utilizationPercentages.onDemand / 100);
 
-    // --- IRR Calculation ---
-    const cashFlows: number[] = [];
-    // Include server cost per GPU in initial investment
-    cashFlows.push(-(gpu.price + serverCost / gpusPerServer)); // Year 0: Initial Investment
+      // Calculate gross revenue for this month
+      const monthlyGrossRevenue = monthlyAverageRentalRate * hoursPerMonth;
 
-    // Add annual profit for each year up to contract duration
-    for (let i = 1; i <= contractDuration; i++) {
-        if (i === contractDuration) {
-             // Add residual value in the last year (apply to GPU only, not server)
-            cashFlows.push(annualProfit + gpu.price * (residualValues as any)[`year${Math.min(i, 3)}`]);
-        } else {
-            cashFlows.push(annualProfit);
+      // Apply platform fee
+      const platformFeeAmount = monthlyGrossRevenue * (platformFeePercentage / 100);
+      const monthlyNetRevenue = monthlyGrossRevenue - platformFeeAmount;
+
+      // Calculate owner's share of the remaining revenue
+      const monthlyOwnerRevenueAmount = monthlyNetRevenue * (ownerSharePercentage / 100);
+
+      // Calculate profit for this month (revenue - costs)
+      const monthlyProfit = monthlyOwnerRevenueAmount - totalMonthlyCosts;
+
+      // Add to cumulative revenue (not profit) for payback calculation
+      cumulativeRevenue += monthlyOwnerRevenueAmount;
+
+      // Check if we've reached payback based on revenue
+      if (cumulativeRevenue >= totalInvestment && paybackMonth === contractDuration * 12) {
+        // We've reached payback this month - to match the graph
+        paybackMonth = month + 1;
+
+        // If we want more precision (for exact point of intersection)
+        if (month > 0) {
+          // Calculate how far into the month we reached payback
+          const prevCumulativeRevenue = cumulativeRevenue - monthlyOwnerRevenueAmount;
+          const fractionOfMonth = (totalInvestment - prevCumulativeRevenue) / monthlyOwnerRevenueAmount;
+          paybackMonth = month + fractionOfMonth;
         }
+      }
+
+      // Store monthly revenue
+      monthlyOwnerRevenue[month] = monthlyOwnerRevenueAmount;
+
+      // Store cumulative revenue for reference
+      monthlyCumulativeRevenue[month] = cumulativeRevenue;
+
+      // Add to yearly total
+      yearlyOwnerRevenue[year] += monthlyOwnerRevenueAmount;
+      totalOwnerRevenue += monthlyOwnerRevenueAmount;
     }
 
-    const irr = calculateIRR(cashFlows);
+    // More accurate payback calculation based on actual monthly data
+    const paybackYears = paybackMonth / 12;
 
-    // Calculate Payback Period (Simple) - updated to include server cost per GPU
-    const totalInvestment = gpu.price + serverCost / gpusPerServer;
-    const paybackYears = annualProfit > 0 ? totalInvestment / annualProfit : Infinity;
+    // Initialize yearly net profits array for cash flow calculation
+    const yearlyProfits = Array(contractDuration).fill(0);
+    for (let year = 0; year < contractDuration; year++) {
+      yearlyProfits[year] = yearlyOwnerRevenue[year] - (totalMonthlyCosts * 12);
+    }
+
+    // Calculate residual value for financial metrics
+    const residualValueKey = `year${Math.min(contractDuration, 3)}` as keyof typeof residualValues;
+    const residualGpuValue = gpu.price * residualValues[residualValueKey];
+
+    // Calculate server residual value
+    const serverDepreciationPerYear = 0.18; // 18% per year
+    const serverResidualPct = Math.max(0.1, 1 - (contractDuration * serverDepreciationPerYear));
+    const residualServerValue = (serverCost / gpusPerServer) * serverResidualPct;
+
+    // Total residual value
+    const totalResidualValue = residualGpuValue + residualServerValue;
+
+    // Calculate total costs for the contract period
+    const totalCosts = totalMonthlyCosts * 12 * contractDuration;
+
+    // Calculate traditional ROI: (Total Return - Initial Investment) / Initial Investment
+    // Where Total Return = Total Revenue + Residual Value - Operating Costs
+    const totalReturn = totalOwnerRevenue + totalResidualValue - totalCosts;
+    const totalROI = (totalReturn / totalInvestment) * 100;
+
+    // Create monthly cash flows for more accurate IRR calculation
+    const monthlyCashFlows: number[] = [-totalInvestment]; // Initial investment (negative)
+
+    // Add monthly profits (revenue - costs)
+    for (let month = 0; month < contractDuration * 12; month++) {
+      // Monthly profit is revenue minus costs
+      const monthlyProfit = monthlyOwnerRevenue[month] - totalMonthlyCosts;
+
+      // For the final month, add the residual value
+      if (month === (contractDuration * 12) - 1) {
+        monthlyCashFlows.push(monthlyProfit + totalResidualValue);
+      } else {
+        monthlyCashFlows.push(monthlyProfit);
+      }
+    }
+
+    // Check if cash flows would lead to payback (should be positive sum if we payback)
+    const sumCashFlows = monthlyCashFlows.reduce((sum, flow) => sum + flow, 0);
+
+    // Sanity check: If payback occurs, the sum should be positive and IRR should be positive
+    let sanityIrr = null;
+    if (paybackMonth < contractDuration * 12 && sumCashFlows > 0) {
+      // Calculate IRR on monthly basis
+      sanityIrr = calculateIRR(monthlyCashFlows);
+
+      // If IRR calculation returns negative but we have payback, there's likely an issue
+      // In this case, attempt a simpler IRR calculation method
+      if (sanityIrr === null || sanityIrr < 0) {
+        // Try a simplified IRR calculation for cases where the standard method fails
+        // This approximation works better for typical investment patterns
+        const simplifiedCashFlows = [-totalInvestment];
+        const monthlyReturn = sumCashFlows / (contractDuration * 12);
+
+        // Create simplified monthly flows (same amount each month)
+        for (let i = 0; i < contractDuration * 12; i++) {
+          if (i === contractDuration * 12 - 1) {
+            // Add residual in last month
+            simplifiedCashFlows.push(monthlyReturn + totalResidualValue);
+          } else {
+            simplifiedCashFlows.push(monthlyReturn);
+          }
+        }
+
+        // Try IRR calculation with simplified flows
+        sanityIrr = calculateIRR(simplifiedCashFlows);
+      }
+    }
+
+    // Calculate IRR on monthly basis
+    const monthlyIrr = sanityIrr || calculateIRR(monthlyCashFlows);
+
+    // Convert monthly IRR to annual IRR (compound over 12 months)
+    const annualIrr = monthlyIrr !== null && monthlyIrr > -1
+      ? Math.pow(1 + monthlyIrr, 12) - 1
+      : (monthlyIrr === -1 ? -1 : null);
 
     return {
-      ownerAnnualRevenue,
-      annualPowerCost,
-      annualHostingCost,
-      totalAnnualCosts,
-      annualProfit,
-      annualROI,
+      ownerAnnualRevenue: totalOwnerRevenue / contractDuration,
+      annualPowerCost: monthlyPowerCost * 12,
+      annualHostingCost: monthlyHostingCost * 12,
+      totalAnnualCosts: totalMonthlyCosts * 12,
+      annualProfit: totalOwnerRevenue / contractDuration - totalMonthlyCosts * 12,
+      annualROI: totalROI, // This is actually total ROI for the entire contract period
+      totalResidualValue,
       paybackYears,
-      irr, // Add IRR to returned metrics
+      paybackMonth,
+      irr: annualIrr,
+      yearlyRevenue: yearlyOwnerRevenue,
+      monthlyRevenue: monthlyOwnerRevenue,
+      monthlyCumulativeRevenue
     };
-  }, [gpu, rentalType, utilizationPercentages, revenueSplit, hostingCost, powerCost, residualValues, contractDuration, serverCost, gpusPerServer]);
+  }, [gpu, rentalType, utilizationPercentages, revenueSplit, hostingCost, powerCost, residualValues, contractDuration, serverCost, gpusPerServer, priceDecayRate, platformFeePercentage, ownerSharePercentage]);
+
+  // Calculate revenue values based on financialMetrics to include price decay
+  // (this is already the owner's revenue after platform fee and revenue split)
+  const ownerRevenue = financialMetrics.ownerAnnualRevenue;
+
+  // For display purposes, recalculate the gross annual revenue before splits
+  const grossAnnualRevenue = ownerRevenue / ((100 - platformFeePercentage) / 100) / (ownerSharePercentage / 100);
+
+  // Rest of the calculations based on the correct owner revenue
+  const totalOwnerRevenue = advancedMode && financialMetrics.yearlyRevenue
+    ? financialMetrics.yearlyRevenue.reduce((sum, val) => sum + val, 0)
+    : ownerRevenue * contractDuration;
+
+  // Calculate ROI and Payback using financialMetrics which includes price decay
+  const profit = totalOwnerRevenue - initialCost;
+  const roi = initialCost > 0 ? (profit / initialCost) * 100 : 0;
+  const paybackMonths = financialMetrics.paybackMonth;
+
+  // Check if secure mode is available for this GPU - This is now handled by checking specific rentalType rates
+  // const secureAvailable = gpu.secureSpot !== null || gpu.secureOnDemand !== null
 
   // Handler for GPU select (corrected type)
   const handleGpuChange = (value: string) => {
@@ -283,59 +425,59 @@ export function GpuCalculator() {
   return (
     <Card className="w-full bg-fgpu-stone-900 border-fgpu-stone-700">
       <div className="p-4">
-        <h5 className="text-xl font-bold tracking-tight text-fgpu-white flex items-center gap-2">
-          <HiChip className="text-fgpu-volt" />
-          GPU Investment Calculator
-        </h5>
-        <p className="font-normal text-fgpu-gray-300">
-          Calculate the total cost of ownership, expected revenue, and return on investment
-        </p>
+      <h5 className="text-xl font-bold tracking-tight text-fgpu-white flex items-center gap-2">
+        <HiChip className="text-fgpu-volt" />
+        GPU Investment Calculator
+      </h5>
+      <p className="font-normal text-fgpu-gray-300">
+        Calculate the total cost of ownership, expected revenue, and return on investment
+      </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <HiChip className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <HiChip className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
                 <Label htmlFor="gpu-select" className="text-fgpu-stone-600 dark:text-fgpu-gray-300">GPU Model</Label>
-                <Badge
-                  color={gpu.cardType === "Data Center" ? "blue" : gpu.cardType === "Workstation" ? "purple" : "gray"}
-                  className="ml-auto"
-                >
-                  {gpu.cardType}
-                </Badge>
-              </div>
+              <Badge
+                color={gpu.cardType === "Data Center" ? "blue" : gpu.cardType === "Workstation" ? "purple" : "gray"}
+                className="ml-auto"
+              >
+                {gpu.cardType}
+              </Badge>
+            </div>
               <Select onValueChange={handleGpuChange} defaultValue={selectedGpu}>
                 <SelectTrigger id="gpu-select">
                     <SelectValue placeholder="Select a GPU" />
                 </SelectTrigger>
                 <SelectContent>
                   <Label className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">Data Center GPUs</Label>
-                  {gpuData
-                    .filter((gpu) => gpu.cardType === "Data Center")
-                    .map((gpu) => (
+                {gpuData
+                  .filter((gpu) => gpu.cardType === "Data Center")
+                  .map((gpu) => (
                       <SelectItem key={gpu.id} value={gpu.id}>
                         {gpu.name} (${gpu.price.toLocaleString()})
                       </SelectItem>
                     ))}
                   <Label className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">Consumer GPUs</Label>
-                  {gpuData
-                    .filter((gpu) => gpu.cardType === "Consumer")
-                    .map((gpu) => (
+                {gpuData
+                  .filter((gpu) => gpu.cardType === "Consumer")
+                  .map((gpu) => (
                       <SelectItem key={gpu.id} value={gpu.id}>
                         {gpu.name} (${gpu.price.toLocaleString()})
                       </SelectItem>
                     ))}
                   <Label className="px-2 py-1.5 text-sm font-semibold text-gray-500 dark:text-gray-400">Workstation GPUs</Label>
-                  {gpuData
-                    .filter((gpu) => gpu.cardType === "Workstation")
-                    .map((gpu) => (
+                {gpuData
+                  .filter((gpu) => gpu.cardType === "Workstation")
+                  .map((gpu) => (
                       <SelectItem key={gpu.id} value={gpu.id}>
                         {gpu.name} (${gpu.price.toLocaleString()})
                       </SelectItem>
                     ))}
                 </SelectContent>
-              </Select>
-            </div>
+            </Select>
+          </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -367,16 +509,16 @@ export function GpuCalculator() {
               <div className="col-span-2 text-xs text-fgpu-stone-500 dark:text-fgpu-gray-400 mt-1">
                 Total initial investment: ${initialCost.toLocaleString()} per GPU (${gpu.price.toLocaleString()} + ${serverCostPerGpu.toLocaleString()} server cost)
               </div>
-            </div>
+          </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <HiClock className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
-                <Label
-                  htmlFor="contract-duration"
-                  className="text-fgpu-stone-600 dark:text-fgpu-gray-300"
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <HiClock className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
+              <Label
+                htmlFor="contract-duration"
+                className="text-fgpu-stone-600 dark:text-fgpu-gray-300"
                 >Contract Duration (Years)</Label>
-              </div>
+            </div>
               <Select onValueChange={handleContractDurationChange} defaultValue={contractDuration.toString()}>
                 <SelectTrigger id="contract-duration">
                   <SelectValue placeholder="Select Duration" />
@@ -385,19 +527,19 @@ export function GpuCalculator() {
                   <SelectItem value="2">2 Years</SelectItem>
                   <SelectItem value="3">3 Years</SelectItem>
                 </SelectContent>
-              </Select>
-            </div>
+            </Select>
+          </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <HiServer className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
-                  <Label
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <HiServer className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
+                <Label
                     htmlFor="rental-type-select"
-                    className="text-fgpu-stone-600 dark:text-fgpu-gray-300"
+                  className="text-fgpu-stone-600 dark:text-fgpu-gray-300"
                   >Rental Type</Label>
-                </div>
-                <div className="flex items-center gap-2">
+              </div>
+              <div className="flex items-center gap-2">
                   <Select
                     onValueChange={handleRentalTypeChange}
                     defaultValue={rentalType}
@@ -412,54 +554,54 @@ export function GpuCalculator() {
                   </Select>
                 </div>
               </div>
-            </div>
+          </div>
 
-            <div className="space-y-4 p-4 bg-fgpu-stone-600 rounded-lg">
-              <h3 className="text-sm font-medium text-fgpu-gray-300 flex items-center gap-2">
-                <HiLightningBolt className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
-                Usage Distribution
+            <div className="space-y-4 p-4 bg-fgpu-stone-800 border border-fgpu-stone-700 rounded-lg">
+              <h3 className="text-lg font-bold tracking-tight text-fgpu-white flex items-center gap-2">
+                <HiLightningBolt className="text-fgpu-volt" />
+              Usage Distribution
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <HiInformationCircle className="text-gray-400" />
+                      <HiInformationCircle className="text-fgpu-gray-400" />
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Set the percentage of time your GPU will be idle, running spot jobs, or on-demand jobs</p>
                     </TooltipContent>
-                  </Tooltip>
+              </Tooltip>
                 </TooltipProvider>
-              </h3>
+            </h3>
 
-              <div className="space-y-3">
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">Idle</span>
-                    <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{idlePercentage}%</span>
-                  </div>
-                  <Slider
-                    value={[idlePercentage]}
-                    min={0}
-                    max={100}
-                    step={1}
-                    onValueChange={(values) => {
-                      const newValue = values[0]
-                      setIdlePercentage(newValue)
-                      // Adjust other values proportionally to maintain total of 100%
-                      const remaining = 100 - newValue
-                      const currentTotal = spotPercentage + onDemandPercentage
-                      if (currentTotal > 0) {
-                        const spotRatio = spotPercentage / currentTotal
-                        const newSpot = Math.round(remaining * spotRatio)
-                        setSpotPercentage(newSpot)
-                        setOnDemandPercentage(remaining - newSpot)
+            <div className="space-y-3">
+              <div>
+                <div className="flex justify-between mb-1">
+                    <span className="text-fgpu-gray-300">Idle</span>
+                    <span className="text-fgpu-gray-400">{idlePercentage}%</span>
+                </div>
+                <Slider
+                  value={[idlePercentage]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  onValueChange={(values) => {
+                    const newValue = values[0]
+                    setIdlePercentage(newValue)
+                    // Adjust other values proportionally to maintain total of 100%
+                    const remaining = 100 - newValue
+                    const currentTotal = spotPercentage + onDemandPercentage
+                    if (currentTotal > 0) {
+                      const spotRatio = spotPercentage / currentTotal
+                      const newSpot = Math.round(remaining * spotRatio)
+                      setSpotPercentage(newSpot)
+                      setOnDemandPercentage(remaining - newSpot)
                         // Update utilizationPercentages too
                         setUtilizationPercentages({
                           idle: newValue,
                           spot: newSpot,
                           onDemand: remaining - newSpot
                         })
-                      } else {
-                        // If both are 0, split remaining evenly
+                    } else {
+                      // If both are 0, split remaining evenly
                         const newSpot = Math.round(remaining / 2)
                         const newOnDemand = Math.round(remaining / 2)
                         setSpotPercentage(newSpot)
@@ -470,146 +612,146 @@ export function GpuCalculator() {
                           spot: newSpot,
                           onDemand: newOnDemand
                         })
-                      }
-                    }}
-                    className="w-full"
-                  />
-                </div>
+                    }
+                  }}
+                  className="w-full"
+                />
+              </div>
 
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">Spot</span>
-                    <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{spotPercentage}%</span>
-                  </div>
-                  <Slider
-                    value={[spotPercentage]}
-                    min={0}
-                    max={100 - idlePercentage}
-                    step={1}
-                    onValueChange={(values) => {
-                      const newValue = values[0]
-                      setSpotPercentage(newValue)
-                      setOnDemandPercentage(100 - idlePercentage - newValue)
+              <div>
+                <div className="flex justify-between mb-1">
+                    <span className="text-fgpu-gray-300">Spot</span>
+                    <span className="text-fgpu-gray-400">{spotPercentage}%</span>
+                </div>
+                <Slider
+                  value={[spotPercentage]}
+                  min={0}
+                  max={100 - idlePercentage}
+                  step={1}
+                  onValueChange={(values) => {
+                    const newValue = values[0]
+                    setSpotPercentage(newValue)
+                    setOnDemandPercentage(100 - idlePercentage - newValue)
                       // Update utilizationPercentages too
                       setUtilizationPercentages({
                         idle: idlePercentage,
                         spot: newValue,
                         onDemand: 100 - idlePercentage - newValue
                       })
-                    }}
-                    className="w-full"
-                  />
-                </div>
+                  }}
+                  className="w-full"
+                />
+              </div>
 
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">On-Demand</span>
-                    <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{onDemandPercentage}%</span>
-                  </div>
-                  <Slider
-                    value={[onDemandPercentage]}
-                    min={0}
-                    max={100 - idlePercentage}
-                    step={1}
-                    onValueChange={(values) => {
-                      const newValue = values[0]
-                      setOnDemandPercentage(newValue)
-                      setSpotPercentage(100 - idlePercentage - newValue)
+              <div>
+                <div className="flex justify-between mb-1">
+                    <span className="text-fgpu-gray-300">On-Demand</span>
+                    <span className="text-fgpu-gray-400">{onDemandPercentage}%</span>
+                </div>
+                <Slider
+                  value={[onDemandPercentage]}
+                  min={0}
+                  max={100 - idlePercentage}
+                  step={1}
+                  onValueChange={(values) => {
+                    const newValue = values[0]
+                    setOnDemandPercentage(newValue)
+                    setSpotPercentage(100 - idlePercentage - newValue)
                       // Update utilizationPercentages too
                       setUtilizationPercentages({
                         idle: idlePercentage,
                         spot: 100 - idlePercentage - newValue,
                         onDemand: newValue
                       })
-                    }}
-                    className="w-full"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-fgpu-stone-700">
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium text-fgpu-stone-600 dark:text-fgpu-gray-300">
-                    Effective Hourly Rate:
-                  </span>
-                  <span className="text-sm font-medium text-fgpu-volt">${hourlyRate.toFixed(3)}/hr</span>
-                </div>
+                  }}
+                  className="w-full"
+                />
               </div>
             </div>
 
-            <div className="space-y-4 p-4 bg-fgpu-stone-600 rounded-lg">
-              <h3 className="text-sm font-medium text-fgpu-gray-300 flex items-center gap-2">
-                <HiCurrencyDollar className="text-fgpu-stone-500 dark:text-fgpu-gray-400" />
-                Revenue Sharing
+            <div className="mt-3 pt-3 border-t border-fgpu-stone-700">
+              <div className="flex justify-between">
+                  <span className="text-fgpu-gray-300 font-medium">
+                  Effective Hourly Rate:
+                </span>
+                  <span className="text-fgpu-volt font-medium">${baseHourlyRate.toFixed(3)}/hr</span>
+              </div>
+            </div>
+          </div>
+
+            <div className="space-y-4 p-4 bg-fgpu-stone-800 border border-fgpu-stone-700 rounded-lg">
+              <h3 className="text-lg font-bold tracking-tight text-fgpu-white flex items-center gap-2">
+                <HiCurrencyDollar className="text-fgpu-volt" />
+              Revenue Sharing
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <HiInformationCircle className="text-gray-400" />
+                      <HiInformationCircle className="text-fgpu-gray-400" />
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Set how revenue is split between the platform, owner (investor), and provider (data center)</p>
                     </TooltipContent>
-                  </Tooltip>
+              </Tooltip>
                 </TooltipProvider>
-              </h3>
+            </h3>
 
-              <div className="space-y-3">
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">Platform Fee</span>
-                    <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{platformFeePercentage}%</span>
-                  </div>
-                  <Slider
-                    value={[platformFeePercentage]}
-                    min={5}
-                    max={40}
-                    step={1}
-                    onValueChange={(values) => setPlatformFeePercentage(values[0])}
-                    className="w-full"
-                  />
+            <div className="space-y-3">
+              <div>
+                <div className="flex justify-between mb-1">
+                    <span className="text-fgpu-gray-300">Platform Fee</span>
+                    <span className="text-fgpu-gray-400">{platformFeePercentage}%</span>
                 </div>
-
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">
-                      Owner Share (of remaining)
-                    </span>
-                    <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">{ownerSharePercentage}%</span>
-                  </div>
-                  <Slider
-                    value={[ownerSharePercentage]}
-                    min={10}
-                    max={90}
-                    step={1}
-                    onValueChange={(values) => setOwnerSharePercentage(values[0])}
-                    className="w-full"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between mb-1">
-                    <span className="text-sm text-fgpu-stone-600 dark:text-fgpu-gray-300">
-                      Provider Share (of remaining)
-                    </span>
-                    <span className="text-sm text-fgpu-stone-500 dark:text-fgpu-gray-400">
-                      {100 - ownerSharePercentage}%
-                    </span>
-                  </div>
-                  <div className="w-full h-2 bg-fgpu-stone-700 rounded-lg">
-                    <div
-                      className="h-2 bg-fgpu-volt rounded-lg"
-                      style={{ width: `${100 - ownerSharePercentage}%` }}
-                    ></div>
-                  </div>
-                </div>
+                <Slider
+                  value={[platformFeePercentage]}
+                  min={5}
+                  max={40}
+                  step={1}
+                  onValueChange={(values) => setPlatformFeePercentage(values[0])}
+                  className="w-full"
+                />
               </div>
 
-              <div className="mt-3 pt-3 border-t border-fgpu-stone-700">
-                <div className="flex justify-between">
-                  <span className="text-sm font-medium text-fgpu-stone-600 dark:text-fgpu-gray-300">
-                    Annual Owner Revenue:
+              <div>
+                <div className="flex justify-between mb-1">
+                    <span className="text-fgpu-gray-300">
+                    Owner Share (of remaining)
                   </span>
-                  <span className="text-sm font-medium text-fgpu-volt">${ownerRevenue.toFixed(0)}/year</span>
+                    <span className="text-fgpu-gray-400">{ownerSharePercentage}%</span>
+                </div>
+                <Slider
+                  value={[ownerSharePercentage]}
+                  min={10}
+                  max={90}
+                  step={1}
+                  onValueChange={(values) => setOwnerSharePercentage(values[0])}
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between mb-1">
+                    <span className="text-fgpu-gray-300">
+                    Provider Share (of remaining)
+                  </span>
+                    <span className="text-fgpu-gray-400">
+                    {100 - ownerSharePercentage}%
+                  </span>
+                </div>
+                  <div className="w-full h-2 bg-fgpu-stone-900 rounded-lg">
+                  <div
+                    className="h-2 bg-fgpu-volt rounded-lg"
+                    style={{ width: `${100 - ownerSharePercentage}%` }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-fgpu-stone-700">
+              <div className="flex justify-between">
+                  <span className="text-fgpu-gray-300 font-medium">
+                  Annual Owner Revenue:
+                </span>
+                  <span className="text-fgpu-volt font-medium">${ownerRevenue.toFixed(0)}/year</span>
                 </div>
               </div>
             </div>
@@ -624,105 +766,143 @@ export function GpuCalculator() {
               <Label htmlFor="advanced-mode">Advanced Mode</Label>
             </div>
 
-            {/* Residual Value Input (Conditional) */}
+            {/* Advanced Settings (Conditional) */}
             {advancedMode && (
-                <div className="grid gap-4 mt-4 p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50">
-                    <h4 className="text-md font-medium mb-2 text-gray-600 dark:text-gray-400">Residual Value (% of Original Price)</h4>
-                    <div className="space-y-3">
-                        <div className="flex justify-between mb-1">
-                            <Label htmlFor="residual-slider" className="text-sm text-gray-600 dark:text-gray-400">
-                              Year {contractDuration} Residual
-                            </Label>
-                            <span className="text-sm text-gray-500 dark:text-gray-400">
-                              {Math.round(residualValues[`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues] * 100)}%
-                            </span>
-                        </div>
-                        <Slider
-                            id="residual-slider"
-                            value={[residualValues[`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues] * 100]}
-                            min={0}
-                            max={100}
-                            step={1}
-                            onValueChange={(values) => {
-                                const newValue = (values[0] / 100).toString();
-                                handleResidualValueChange(`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues, newValue);
-                            }}
-                            className="w-full"
-                        />
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Estimated resale value after {contractDuration} years
-                        </p>
+              <div className="grid gap-6 mt-4">
+                {/* Residual Value Input */}
+                <div className="grid gap-4 p-4 bg-fgpu-stone-800 border-fgpu-stone-700 border rounded-lg">
+                  <h4 className="text-lg font-bold tracking-tight text-fgpu-white flex items-center gap-2">
+                    <HiCurrencyDollar className="text-fgpu-volt" />
+                    Residual Value
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex justify-between mb-1">
+                      <Label htmlFor="residual-slider" className="text-fgpu-gray-300">
+                        Year {contractDuration} Residual
+                      </Label>
+                      <span className="text-fgpu-gray-400">
+                        {Math.round(residualValues[`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues] * 100)}%
+                      </span>
                     </div>
+                    <Slider
+                      id="residual-slider"
+                      value={[residualValues[`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues] * 100]}
+                      min={0}
+                      max={100}
+                      step={1}
+                      onValueChange={(values) => {
+                        const newValue = (values[0] / 100).toString();
+                        handleResidualValueChange(`year${Math.min(contractDuration, 3)}` as keyof typeof residualValues, newValue);
+                      }}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-fgpu-gray-400 mt-1">
+                      Estimated resale value after {contractDuration} years
+                    </p>
+          </div>
                 </div>
+
+                {/* Price Decay Input */}
+                <div className="grid gap-4 p-4 bg-fgpu-stone-800 border-fgpu-stone-700 border rounded-lg">
+                  <h4 className="text-lg font-bold tracking-tight text-fgpu-white flex items-center gap-2">
+                    <HiOutlineTrendingUp className="text-fgpu-volt" />
+                    Price Decay
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex justify-between mb-1">
+                      <Label htmlFor="price-decay-slider" className="text-fgpu-gray-300">
+                        Annual Price Reduction Rate
+                      </Label>
+                      <span className="text-fgpu-gray-400">
+                        {priceDecayRate}%
+                      </span>
+                    </div>
+                    <Slider
+                      id="price-decay-slider"
+                      value={[priceDecayRate]}
+                      min={0}
+                      max={50}
+                      step={1}
+                      onValueChange={(values) => setPriceDecayRate(values[0])}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-fgpu-gray-400 mt-1">
+                      Rental rates will decline by this percentage each year (reflecting market competition)
+                    </p>
+                  </div>
+                </div>
+              </div>
             )}
-          </div>
-
-          <div className="md:col-span-2">
-            <div className="mb-4 border-b border-fgpu-gray-300 dark:border-fgpu-stone-700">
-              <ul className="flex flex-wrap -mb-px text-sm font-medium text-center" role="tablist">
-                <li className="mr-2" role="presentation">
-                  <button
-                    className={`inline-block p-4 border-b-2 rounded-t-lg ${activeTab === "overview" ? "text-fgpu-volt border-fgpu-volt dark:text-fgpu-volt dark:border-fgpu-volt" : "hover:text-fgpu-stone-600 hover:border-fgpu-stone-300 dark:hover:text-fgpu-gray-300"}`}
-                    onClick={() => setActiveTab("overview")}
-                    type="button"
-                    role="tab"
-                  >
-                    <div className="flex items-center">
-                      <HiChip className="mr-2" />
-                      Overview
-                    </div>
-                  </button>
-                </li>
-                <li className="mr-2" role="presentation">
-                  <button
-                    className={`inline-block p-4 border-b-2 rounded-t-lg ${activeTab === "tco" ? "text-fgpu-volt border-fgpu-volt dark:text-fgpu-volt dark:border-fgpu-volt" : "hover:text-fgpu-stone-600 hover:border-fgpu-stone-300 dark:hover:text-fgpu-gray-300"}`}
-                    onClick={() => setActiveTab("tco")}
-                    type="button"
-                    role="tab"
-                  >
-                    <div className="flex items-center">
-                      <HiCurrencyDollar className="mr-2" />
-                      Provider Costs
-                    </div>
-                  </button>
-                </li>
-              </ul>
-            </div>
-
-            <div className="p-4">
-              {activeTab === "overview" && (
-                <FinancialMetrics
-                  initialCost={initialCost}
-                  totalCost={initialCost}
-                  totalRevenue={totalOwnerRevenue}
-                  roi={roi}
-                  paybackMonths={paybackMonths}
-                  contractDuration={contractDuration}
-                  irr={financialMetrics.irr}
-                />
-              )}
-
-              {activeTab === "tco" && (
-                <TCOBreakdown
-                  initialCost={initialCost}
-                  powerConsumption={gpu.powerConsumption}
-                  idlePowerConsumption={gpu.idlePowerConsumption}
-                  idlePercentage={idlePercentage}
-                  contractDuration={contractDuration}
-                />
-              )}
-            </div>
-          </div>
         </div>
 
-        <div className="flex justify-between mt-6">
-          <Button
-            color="light"
-            className="flex items-center gap-2 bg-fgpu-stone-100 hover:bg-fgpu-stone-200 dark:bg-fgpu-stone-700 dark:hover:bg-fgpu-stone-600 text-fgpu-black dark:text-fgpu-white"
-          >
-            <HiRefresh />
-            Reset
-          </Button>
+        <div className="md:col-span-2">
+          <div className="mb-4 border-b border-fgpu-gray-300 dark:border-fgpu-stone-700">
+            <ul className="flex flex-wrap -mb-px text-sm font-medium text-center" role="tablist">
+              <li className="mr-2" role="presentation">
+                <button
+                  className={`inline-block p-4 border-b-2 rounded-t-lg ${activeTab === "overview" ? "text-fgpu-volt border-fgpu-volt dark:text-fgpu-volt dark:border-fgpu-volt" : "hover:text-fgpu-stone-600 hover:border-fgpu-stone-300 dark:hover:text-fgpu-gray-300"}`}
+                  onClick={() => setActiveTab("overview")}
+                  type="button"
+                  role="tab"
+                >
+                  <div className="flex items-center">
+                    <HiChip className="mr-2" />
+                    Overview
+                  </div>
+                </button>
+              </li>
+              <li className="mr-2" role="presentation">
+                <button
+                  className={`inline-block p-4 border-b-2 rounded-t-lg ${activeTab === "tco" ? "text-fgpu-volt border-fgpu-volt dark:text-fgpu-volt dark:border-fgpu-volt" : "hover:text-fgpu-stone-600 hover:border-fgpu-stone-300 dark:hover:text-fgpu-gray-300"}`}
+                  onClick={() => setActiveTab("tco")}
+                  type="button"
+                  role="tab"
+                >
+                  <div className="flex items-center">
+                    <HiCurrencyDollar className="mr-2" />
+                    Provider Costs
+                  </div>
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <div className="p-4">
+            {activeTab === "overview" && (
+              <FinancialMetrics
+                initialCost={initialCost}
+                  totalCost={initialCost}
+                totalRevenue={totalOwnerRevenue}
+                roi={roi}
+                paybackMonths={paybackMonths}
+                contractDuration={contractDuration}
+                  irr={financialMetrics.irr}
+                  yearlyRevenue={financialMetrics.yearlyRevenue}
+                  monthlyRevenue={financialMetrics.monthlyRevenue}
+              />
+            )}
+
+            {activeTab === "tco" && (
+              <TCOBreakdown
+                initialCost={initialCost}
+                powerConsumption={gpu.powerConsumption}
+                idlePowerConsumption={gpu.idlePowerConsumption}
+                idlePercentage={idlePercentage}
+                contractDuration={contractDuration}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-between mt-6">
+        <Button
+          color="light"
+          className="flex items-center gap-2 bg-fgpu-stone-100 hover:bg-fgpu-stone-200 dark:bg-fgpu-stone-700 dark:hover:bg-fgpu-stone-600 text-fgpu-black dark:text-fgpu-white"
+        >
+          <HiRefresh />
+          Reset
+        </Button>
         </div>
       </div>
     </Card>

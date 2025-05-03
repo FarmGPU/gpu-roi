@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Card, TextInput, Label, Tooltip } from "flowbite-react"
+import { Card, Label, Tooltip } from "flowbite-react"
+import { Input } from "@/components/ui/input"
 import {
   HiOutlineCurrencyDollar,
   HiOutlineLightningBolt,
@@ -58,70 +59,70 @@ export function TCOBreakdown({
           <div className="space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Label htmlFor="power-cost" value="Power Cost ($/kWh)" className="text-fgpu-gray-300" />
+                <Label htmlFor="power-cost" className="text-fgpu-gray-300">Power Cost ($/kWh)</Label>
                 <Tooltip content="Cost of electricity per kilowatt-hour">
                   <HiInformationCircle className="text-fgpu-gray-400" />
                 </Tooltip>
               </div>
-              <TextInput
+              <Input
                 id="power-cost"
                 type="number"
                 value={powerCost}
                 onChange={(e) => setPowerCost(Number(e.target.value))}
                 min={0}
                 step={0.01}
-                className="bg-fgpu-stone-900 text-fgpu-gray-300 border-fgpu-stone-700"
+                className="dark:bg-fgpu-stone-700 dark:border-fgpu-stone-600 dark:text-white"
               />
             </div>
 
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Label htmlFor="rackspace-cost" value="Rackspace Cost ($/month/rack)" className="text-fgpu-gray-300" />
+                <Label htmlFor="rackspace-cost" className="text-fgpu-gray-300">Rackspace Cost ($/month/rack)</Label>
                 <Tooltip content="Monthly cost for rack space in the data center">
                   <HiInformationCircle className="text-fgpu-gray-400" />
                 </Tooltip>
               </div>
-              <TextInput
+              <Input
                 id="rackspace-cost"
                 type="number"
                 value={rackspaceCost}
                 onChange={(e) => setRackspaceCost(Number(e.target.value))}
                 min={0}
-                className="bg-fgpu-stone-900 text-fgpu-gray-300 border-fgpu-stone-700"
+                className="dark:bg-fgpu-stone-700 dark:border-fgpu-stone-600 dark:text-white"
               />
             </div>
 
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Label htmlFor="network-cost" value="Network Cost ($/month/rack)" className="text-fgpu-gray-300" />
+                <Label htmlFor="network-cost" className="text-fgpu-gray-300">Network Cost ($/month/rack)</Label>
                 <Tooltip content="Monthly cost for network bandwidth per rack">
                   <HiInformationCircle className="text-fgpu-gray-400" />
                 </Tooltip>
               </div>
-              <TextInput
+              <Input
                 id="network-cost"
                 type="number"
                 value={networkCost}
                 onChange={(e) => setNetworkCost(Number(e.target.value))}
                 min={0}
-                className="bg-fgpu-stone-900 text-fgpu-gray-300 border-fgpu-stone-700"
+                className="dark:bg-fgpu-stone-700 dark:border-fgpu-stone-600 dark:text-white"
               />
             </div>
 
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Label htmlFor="gpus-per-rack" value="GPUs per Rack" className="text-fgpu-gray-300" />
+                <Label htmlFor="gpus-per-rack" className="text-fgpu-gray-300">GPUs per Rack</Label>
                 <Tooltip content="Number of GPUs that can be installed in a single rack">
                   <HiInformationCircle className="text-fgpu-gray-400" />
                 </Tooltip>
               </div>
-              <TextInput
+              <Input
                 id="gpus-per-rack"
                 type="number"
                 value={gpusPerRack}
                 onChange={(e) => setGpusPerRack(Number(e.target.value))}
                 min={1}
-                className="bg-fgpu-stone-900 text-fgpu-gray-300 border-fgpu-stone-700"
+                className="dark:bg-fgpu-stone-700 dark:border-fgpu-stone-600 dark:text-white"
               />
             </div>
           </div>
